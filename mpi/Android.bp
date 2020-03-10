@@ -29,6 +29,7 @@ cc_library_shared {
     srcs: [
         "Utils.cpp",
         "QList.cpp",
+        "MpiDebug.cpp",
         "BitReader.cpp",
         "JpegParser.cpp",
         "ExifBuilder.cpp",
@@ -53,5 +54,5 @@ cc_library_shared {
         "hardware/libhardware/include",
     ],
 
-    compile_multilib: "32",
+    // compile_multilib: "32",
 }

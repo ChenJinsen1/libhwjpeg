@@ -25,6 +25,7 @@ LOCAL_CPPFLAGS := \
 LOCAL_SRC_FILES := \
 	Utils.cpp \
 	QList.cpp \
+	MpiDebug.cpp \
 	BitReader.cpp \
 	JpegParser.cpp \
 	ExifBuilder.cpp \

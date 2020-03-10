@@ -377,15 +377,16 @@ static bool exif_save_data_content(ExifData *edata, ExifContent *ifd,
     case EXIF_IFD_1:
         /* Information about the thumbnail (if any) is saved in IFD_1. */
         if (edata->thumb_size) {
-            /* EXIF_TAG_JPEG_INTERCHANGE_FORMAT */
-            exif_set_short(*buf + 6 + offset + 0,
-                           edata->order, EXIF_TAG_JPEG_INTERCHANGE_FORMAT);
-            exif_set_short(*buf + 6 + offset + 2,
-                           edata->order, EXIF_FORMAT_LONG);
-            exif_set_long(*buf + 6 + offset + 4, edata->order, 1);
-            exif_set_long(*buf + 6 + offset + 8, edata->order, *len - 6);
+            int addZeroLen = 0;
 
             ts = *len + edata->thumb_size;
+
+            /* Rockchip only, offset that send to vpu must be aligned 16 */
+            if (((ts + 6 - 20) & 15) != 0) {
+                addZeroLen = 16 - ((ts + 6 - 20) & 15);
+                ts += addZeroLen;
+            }
+
             t = (unsigned char*)realloc(*buf, ts);
             if (!t) {
                 ALOGE("failed to realloc buf with thumb_size: %d", ts);
@@ -395,8 +396,20 @@ static bool exif_save_data_content(ExifData *edata, ExifContent *ifd,
             *buf = t;
             *len = ts;
 
+            if (addZeroLen != 0)
+                memset(*buf + *len - edata->thumb_size - addZeroLen, 0, addZeroLen);
+
             memcpy(*buf + *len - edata->thumb_size,
                    edata->thumb_data, edata->thumb_size);
+
+            /* EXIF_TAG_JPEG_INTERCHANGE_FORMAT */
+            exif_set_short(*buf + 6 + offset + 0,
+                           edata->order, EXIF_TAG_JPEG_INTERCHANGE_FORMAT);
+            exif_set_short(*buf + 6 + offset + 2,
+                           edata->order, EXIF_FORMAT_LONG);
+            exif_set_long(*buf + 6 + offset + 4, edata->order, 1);
+            exif_set_long(*buf + 6 + offset + 8,
+                          edata->order, *len - edata->thumb_size - 6);
             offset += 12;
 
             /* EXIF_TAG_JPEG_INTERCHANGE_FORMAT_LENGTH */

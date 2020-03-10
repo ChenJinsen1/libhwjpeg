@@ -8,14 +8,16 @@
 #include <rk_type.h>
 #include <sys/time.h>
 
+#include "MpiDebug.h"
 #include "QList.h"
 #include "JpegParser.h"
 #include "Utils.h"
 #include "version.h"
 #include "MpiJpegDecoder.h"
 
-#define DEBUG_TIMING
 //#define OUTPUT_CROP
+
+uint32_t mpi_dec_debug = 0;
 
 #define _ALIGN(x, a)            (((x)+(a)-1)&~((a)-1))
 
@@ -28,19 +30,19 @@ static DebugTimeInfo time_info;
 
 static void time_start_record()
 {
-#ifdef DEBUG_TIMING
-    gettimeofday(&time_info.start, NULL);
-#endif
+    if (mpi_dec_debug & DEBUG_TIMING) {
+        gettimeofday(&time_info.start, NULL);
+    }
 }
 
 static void time_end_record(const char *task)
 {
-#ifdef DEBUG_TIMING
-    gettimeofday(&time_info.end, NULL);
-    ALOGD("%s consumes %ld ms", task,
-          (time_info.end.tv_sec  - time_info.start.tv_sec)  * 1000 +
-          (time_info.end.tv_usec - time_info.start.tv_usec) / 1000);
-#endif
+    if (mpi_dec_debug & DEBUG_TIMING) {
+        gettimeofday(&time_info.end, NULL);
+        ALOGD("%s consumes %ld ms", task,
+              (time_info.end.tv_sec  - time_info.start.tv_sec)  * 1000 +
+              (time_info.end.tv_usec - time_info.start.tv_usec) / 1000);
+    }
 }
 
 MpiJpegDecoder::MpiJpegDecoder() :
@@ -50,13 +52,32 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mPackets(NULL),
     mFrames(NULL),
     mPacketGroup(NULL),
-    mFrameGroup(NULL)
+    mFrameGroup(NULL),
+    mInputFile(NULL),
+    mOutputFile(NULL)
 {
     ALOGI("verison - %s", GIT_INFO);
 
     // Output Format set to YUV420SP default
     mOutputFmt = OUT_FORMAT_YUV420SP;
     mBpp = 1.5;
+
+    get_env_u32("mpi_dec_debug", &mpi_dec_debug, 0);
+
+    if (mpi_dec_debug & DEBUG_RECORD_IN) {
+        mInputFile = fopen("/data/dec_input.jpg", "wb+");
+        if (mInputFile) {
+            ALOGD("start dump input jpeg to /data/dec_input.jpg");
+        }
+    }
+
+    if (mpi_dec_debug & DEBUG_RECORD_OUT) {
+        mOutputFile = fopen("/data/dec_output.yuv", "wb+");
+        if (mOutputFile) {
+            ALOGD("start dump output yuv to /data/dec_output.yuv");
+        }
+    }
+
 }
 
 MpiJpegDecoder::~MpiJpegDecoder()
@@ -81,6 +102,13 @@ MpiJpegDecoder::~MpiJpegDecoder()
     if (mFrameGroup) {
         mpp_buffer_group_put(mFrameGroup);
         mFrameGroup = NULL;
+    }
+
+    if (mInputFile != NULL) {
+        fclose(mInputFile);
+    }
+    if (mOutputFile != NULL) {
+        fclose(mOutputFile);
     }
 }
 
@@ -269,6 +297,9 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
         return ret;
     }
 
+    /* dump input data if neccessary */
+    dump_data_to_file((uint8_t*)input_buf, (int)buf_len, mInputFile);
+
     ALOGV("get JPEG dimens: %dx%d", pic_width, pic_height);
 
     hor_stride = _ALIGN(pic_width, 16);
@@ -373,6 +404,9 @@ MPP_RET MpiJpegDecoder::decode_getoutframe(OutputFrame_t *aFrameOut)
 
         memset(aFrameOut, 0, sizeof(OutputFrame_t));
         setup_output_frame_from_mpp_frame(aFrameOut, frame_out);
+
+        /* dump output buffer if neccessary */
+        dump_data_to_file(aFrameOut->MemVirAddr, aFrameOut->OutputSize, mOutputFile);
 
         ret = crop_output_frame_if_neccessary(aFrameOut);
         if (MPP_OK != ret)

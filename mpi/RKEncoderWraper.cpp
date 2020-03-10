@@ -336,8 +336,6 @@ bool generate_app1_header(RkHeaderData *data, unsigned char **buf, int *len)
         goto EXIT;
     }
 
-    ALOGV("generate APP1 header get exif len - %d", exif_len);
-
     // Allocate enough memory for app1 header
     // (SOI + App1Marker + App1Length + exif_info)
     *buf = (unsigned char*)malloc(exif_len + 6);
@@ -349,14 +347,16 @@ bool generate_app1_header(RkHeaderData *data, unsigned char **buf, int *len)
 
     // 0xff 0xd8 0xdd 0xe1
     memcpy(*buf, App1Header, 4);
-    // fill length of app1 exif part
-    exif_set_short(*buf + 4, EXIF_BYTE_ORDER_MOTOROLA, exif_len);
+    // length of app1 exif part
+    exif_set_short(*buf + 4, EXIF_BYTE_ORDER_MOTOROLA, exif_len + 2);
 
     /* add exif info */
     memcpy(*buf + 6, exif_buf, exif_len);
 
     *len = exif_len + 6;
     ret = true;
+
+    ALOGV("generate APP1 header get len - %d",  *len);
 
 EXIT:
     release_exif_data(&eData);

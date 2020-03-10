@@ -4,15 +4,16 @@
 
 #include <stdlib.h>
 #include <string.h>
+
 #include "mpp_err.h"
 #include "Utils.h"
+#include "MpiDebug.h"
 #include "version.h"
 #include "RKEncoderWraper.h"
 #include "QList.h"
 #include "MpiJpegEncoder.h"
 
-#define DEBUG_TIMING
-//#define DEBUG_DUMP_FILE
+uint32_t mpi_enc_debug = 0;
 
 /* APP0 header length of encoded picture default */
 static const int APP0_DEFAULT_LEN = 20;
@@ -28,19 +29,19 @@ static DebugTimeInfo time_info;
 
 static void time_start_record()
 {
-#ifdef DEBUG_TIMING
-    gettimeofday(&time_info.start, NULL);
-#endif
+    if (mpi_enc_debug & DEBUG_TIMING) {
+        gettimeofday(&time_info.start, NULL);
+    }
 }
 
 static void time_end_record(const char *task)
 {
-#ifdef DEBUG_TIMING
-    gettimeofday(&time_info.end, NULL);
-    ALOGD("%s consumes %ld ms", task,
-          (time_info.end.tv_sec  - time_info.start.tv_sec)  * 1000 +
-          (time_info.end.tv_usec - time_info.start.tv_usec) / 1000);
-#endif
+    if (mpi_enc_debug & DEBUG_TIMING) {
+        gettimeofday(&time_info.end, NULL);
+        ALOGD("%s consumes %ld ms", task,
+              (time_info.end.tv_sec  - time_info.start.tv_sec)  * 1000 +
+              (time_info.end.tv_usec - time_info.start.tv_usec) / 1000);
+    }
 }
 
 MpiJpegEncoder::MpiJpegEncoder() :
@@ -60,17 +61,21 @@ MpiJpegEncoder::MpiJpegEncoder() :
     /* input format set to YUV420SP default */
     mInputFmt = INPUT_FMT_YUV420SP;
 
-#ifdef DEBUG_DUMP_FILE
-    mInputFile = fopen("/data/enc_input.yuv", "wb+");
-    if (mInputFile > 0) {
-        ALOGD("start dump input yuv to /data/enc_input.yuv");
+    get_env_u32("mpi_enc_debug", &mpi_enc_debug, 0);
+
+    if (mpi_enc_debug & DEBUG_RECORD_IN) {
+        mInputFile = fopen("/data/enc_input.yuv", "wb+");
+        if (mInputFile) {
+            ALOGD("start dump input yuv to /data/enc_input.yuv");
+        }
     }
 
-    mOutputFile = fopen("/data/enc_output.jpg", "wb+");
-    if (mOutputFile > 0) {
-        ALOGD("start dump output jpeg to /data/enc_output.jpg");
+    if (mpi_enc_debug & DEBUG_RECORD_OUT) {
+        mOutputFile = fopen("/data/enc_output.jpg", "wb+");
+        if (mOutputFile) {
+            ALOGD("start dump output jpeg to /data/enc_output.jpg");
+        }
     }
-#endif
 }
 
 MpiJpegEncoder::~MpiJpegEncoder()
@@ -684,7 +689,7 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
     /* dump output buffer if neccessary */
     dump_data_to_file(outPkt->data, outPkt->size, mOutputFile);
 
-    ALOGV("task encode success get outputFileLen - %d", outPkt->size);
+    ALOGD("task encode success get outputFileLen - %d", outPkt->size);
 
 TASK_OUT:
     if (hData.thumb_data)

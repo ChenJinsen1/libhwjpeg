@@ -1,1 +1,1 @@
-#define GIT_INFO "3fc3571 author: Chen Jinsen Initialize directory structure and readme file"
+#define GIT_INFO "735cb5a author: Chen Jinsen Initialize directory structure and readme file"

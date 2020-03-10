@@ -12,7 +12,7 @@ cc_binary {
     ],
     header_libs: ["libhwjpeg_headers"],
     export_header_lib_headers: ["libhwjpeg_headers"],
-    compile_multilib: "32",
+    // compile_multilib: "32",
 }
 
 //
@@ -29,5 +29,5 @@ cc_binary {
     ],
     header_libs: ["libhwjpeg_headers"],
     export_header_lib_headers: ["libhwjpeg_headers"],
-    compile_multilib: "32",
+    // compile_multilib: "32",
 }

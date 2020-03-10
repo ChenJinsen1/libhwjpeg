@@ -117,7 +117,7 @@ MPP_RET jpeg_parser_get_dimens(char *buf, size_t buf_size,
         }
 
         ALOGV("marker = 0x%x, avail_size_in_buf = %d\n",
-              start_code, buf_end - buf_ptr);
+              start_code, (int)(buf_end - buf_ptr));
 
         /* setup bit read context */
         BitReader br(buf_ptr, buf_end - buf_ptr);
