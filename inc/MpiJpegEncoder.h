@@ -118,6 +118,7 @@ private:
     FILE            *mOutputFile;
 
     void updateEncodeQuality(int quant);
+    MPP_RET cropInputYUVImage(EncInInfo *aInfoIn, void* outAddr);
 
     MPP_RET runFrameEnc(MppFrame in_frame, MppPacket out_packet);
 };

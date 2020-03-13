@@ -463,6 +463,52 @@ MPP_RET MpiJpegEncoder::runFrameEnc(MppFrame in_frame, MppPacket out_packet)
     return MPP_NOK;
 }
 
+MPP_RET MpiJpegEncoder::cropInputYUVImage(EncInInfo *aInfoIn, void* outAddr)
+{
+    MPP_RET ret = MPP_OK;
+
+    uint8_t *src_addr, *dst_addr;
+    uint32_t src_width, src_height;
+    uint32_t dst_width, dst_height;
+    float hScale, vScale;
+
+    src_addr = aInfoIn->inputVirAddr;
+    dst_addr = (uint8_t*)outAddr;
+    src_width = _ALIGN(aInfoIn->width, 2);
+    src_height = _ALIGN(aInfoIn->height, 2);
+    dst_width = _ALIGN(aInfoIn->thumbWidth, 2);
+    dst_height = _ALIGN(aInfoIn->thumbHeight, 2);
+
+    hScale = (float)src_width / dst_width;
+    vScale = (float)src_height / dst_height;
+
+    if (hScale > 16 || vScale > 16) {
+        uint32_t scale_width, scale_height;
+
+        ALOGV("Big YUV scale[%f,%f], will crop twice instead.", hScale, vScale);
+
+        scale_width = _ALIGN(dst_width + (src_width - dst_width) / 2, 2);
+        scale_height = _ALIGN(dst_height + (src_height - dst_height) / 2, 2);
+
+        ret = crop_yuv_image(src_addr, dst_addr, src_width, src_height,
+                             src_width, src_height, scale_width, scale_height);
+        if (MPP_OK != ret) {
+            ALOGE("failed to crop scale ret %d", ret);
+            return ret;
+        }
+
+        src_addr = dst_addr = (uint8_t*)outAddr;
+        src_width = scale_width;
+        src_height = scale_height;
+    }
+
+    // crop raw buffer to the size of thumbnail first
+    ret = crop_yuv_image(src_addr, dst_addr, src_width, src_height,
+                         src_width, src_height, dst_width, dst_height);
+
+    return ret;
+}
+
 bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn,
                                    int dst_offset, OutputPacket_t *aPktOut)
 {
@@ -569,6 +615,10 @@ bool MpiJpegEncoder::encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len)
     int v_stride        = _ALIGN(height, 8);
     int frame_size      = 0;
 
+    // thumbNail scale parameter
+    float hScale, vScale;
+    int alloc_width, alloc_height;
+
     ALOGV("start encode thumb size-%dx%d", width, height);
 
     /* update encode quality and config before encode */
@@ -581,7 +631,18 @@ bool MpiJpegEncoder::encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len)
     mpp_frame_set_ver_stride(frame, v_stride);
     mpp_frame_set_fmt(frame, (MppFrameFormat)aInfoIn->format);
 
-    frame_size = getMPPFrameSize(aInfoIn->format, width, height);
+    hScale = (float)aInfoIn->width / aInfoIn->thumbWidth;
+    vScale = (float)aInfoIn->height / aInfoIn->thumbHeight;
+
+    if (hScale > 16 || vScale > 16) {
+        alloc_width = width + (aInfoIn->width - width) / 2;
+        alloc_height = height + (aInfoIn->height - height) / 2;
+    } else {
+        alloc_width = width;
+        alloc_height = height;
+    }
+
+    frame_size = getMPPFrameSize(aInfoIn->format, alloc_width, alloc_height);
     ret = mpp_buffer_get(mMemGroup, &frm_buf, frame_size);
     if (MPP_OK != ret) {
         ALOGE("failed to get buffer for input frame ret %d", ret);
@@ -590,11 +651,8 @@ bool MpiJpegEncoder::encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len)
 
     frm_ptr = mpp_buffer_get_ptr(frm_buf);
 
-    // crop raw buffer to the size of thumbnail first
-    ret = crop_yuv_image(aInfoIn->inputVirAddr, (uint8_t*)frm_ptr,
-                         aInfoIn->width, aInfoIn->height,
-                         aInfoIn->width, aInfoIn->height,
-                         aInfoIn->thumbWidth, aInfoIn->thumbHeight);
+    /* crop raw buffer to the size of thumbnail first */
+    ret = cropInputYUVImage(aInfoIn, frm_ptr);
     if (MPP_OK != ret) {
         ALOGE("failed to crop yuv image before encode thumb.");
         goto ENCODE_OUT;
@@ -660,8 +718,10 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
 
     if (inInfo->doThumbNail) {
         ret = encodeThumb(inInfo, &hData.thumb_data, &hData.thumb_size);
-        if (!ret || hData.thumb_size <= 0)
+        if (!ret || hData.thumb_size <= 0) {
+            inInfo->doThumbNail = 0;
             ALOGW("faild to get thumbNail, will remove it.");
+        }
     }
 
     /* Generate JPEG exif app1 header */
