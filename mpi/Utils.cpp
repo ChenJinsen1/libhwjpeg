@@ -280,7 +280,7 @@ MPP_RET read_yuv_image(uint8_t *dst, uint8_t *src, int width, int height,
     case MPP_FMT_YUV422_YUYV :
     case MPP_FMT_YUV422_UYVY : {
         for (row = 0; row < height; row++) {
-            memcpy(buf_y + row * hor_stride, src, width * 2);
+            memcpy(buf_y + row * hor_stride * 2, src, width * 2);
             src += width * 2;
         }
     } break;

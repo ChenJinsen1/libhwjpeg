@@ -121,7 +121,7 @@ bool MpiJpegEncoder::prepareEncoder()
         goto FAIL;
     }
 
-    mPackets = new QList((node_destructor)mpp_frame_deinit);
+    mPackets = new QList((node_destructor)mpp_packet_deinit);
 
     /* mpp memery buffer group */
     mpp_buffer_group_get_internal(&mMemGroup, MPP_BUFFER_TYPE_ION);
@@ -206,7 +206,7 @@ bool MpiJpegEncoder::updateEncodeCfg(int width, int height,
     }
 
     hor_stride = _ALIGN(width, 16);
-    ver_stride = _ALIGN(height, 8);
+    ver_stride = _ALIGN(height, 16);
 
     prep_cfg.change        = MPP_ENC_PREP_CFG_CHANGE_INPUT |
                              MPP_ENC_PREP_CFG_CHANGE_ROTATION |
@@ -339,6 +339,7 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
 
         aPktOut->data = (uint8_t*)mpp_packet_get_pos(packet);
         aPktOut->size = mpp_packet_get_length(packet);
+        aPktOut->packetHandler = packet;
 
         /* dump output packet at mOutputFile if neccessary */
         dump_mpp_packet_to_file(packet, mOutputFile);
@@ -386,6 +387,7 @@ bool MpiJpegEncoder::encodeFile(const char *input_file, const char *output_file)
     if (MPP_OK != ret)
         ALOGE("failed to dump packet to file %s", output_file);
 
+    deinitOutputPacket(&pktOut);
     flushBuffer();
 
     ALOGD("JPEG encode success get output file %s with size %d",
@@ -570,7 +572,7 @@ bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn,
         goto ENCODE_OUT;
     }
     /* TODO: set output buffer offset to mpp */
-    mpp_buffer_set_index(pkt_buf, pkt_offset);
+    //mpp_buffer_set_index(pkt_buf, pkt_offset);
     mpp_packet_init_with_buffer(&packet, pkt_buf);
 
     ret = runFrameEnc(frame, packet);
