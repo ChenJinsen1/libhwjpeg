@@ -49,6 +49,7 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mMppCtx(NULL),
     mMpi(NULL),
     mInitOK(0),
+    mInBufLen(0),
     mPackets(NULL),
     mFrames(NULL),
     mPacketGroup(NULL),
@@ -112,7 +113,7 @@ MpiJpegDecoder::~MpiJpegDecoder()
     }
 }
 
-bool MpiJpegDecoder::prepareDecoder()
+bool MpiJpegDecoder::reinitMppDecoder()
 {
     MPP_RET ret         = MPP_OK;
 
@@ -121,8 +122,10 @@ bool MpiJpegDecoder::prepareDecoder()
     // non-block call
     MppPollType timeout = MPP_POLL_NON_BLOCK;
 
-    if (mInitOK)
-        return true;
+    if (mMppCtx) {
+        mpp_destroy(mMppCtx);
+        mMppCtx = NULL;
+    }
 
     ret = mpp_create(&mMppCtx, &mMpi);
     if (MPP_OK != ret) {
@@ -164,6 +167,26 @@ bool MpiJpegDecoder::prepareDecoder()
             ALOGE("failed to set output format %d ret %d", mOutputFmt, ret);
     }
 
+    return true;
+
+FAIL:
+    if (mMppCtx) {
+        mpp_destroy(mMppCtx);
+        mMppCtx = NULL;
+    }
+    return false;
+}
+
+bool MpiJpegDecoder::prepareDecoder()
+{
+    if (mInitOK)
+        return true;
+
+    if (!reinitMppDecoder()) {
+        ALOGE("failed to init mpp decoder");
+        return false;
+    }
+
     mPackets = new QList((node_destructor)mpp_packet_deinit);
     mFrames = new QList((node_destructor)mpp_frame_deinit);
 
@@ -178,13 +201,6 @@ bool MpiJpegDecoder::prepareDecoder()
     mInitOK = 1;
 
     return true;
-
-FAIL:
-    if (mMppCtx) {
-        mpp_destroy(mMppCtx);
-        mMppCtx = NULL;
-    }
-    return false;
 }
 
 void MpiJpegDecoder::flushBuffer()
@@ -289,6 +305,12 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
     if (mPackets->list_size() > 5)
         return MPP_ERR_BUFFER_FULL;
 
+    /* Reinit mpp decoder when get resolution or format info-change */
+    if (mInBufLen != 0 && mInBufLen != buf_len) {
+        ALOGD("found resolution info-change, start reinit mpp decoder.");
+        reinitMppDecoder();
+    }
+
     // NOTE: The size of output frame and input packet depends on JPEG
     // dimens, so we get JPEG dimens from file header first.
     ret = jpeg_parser_get_dimens(input_buf, buf_len, &pic_width, &pic_height);
@@ -361,6 +383,8 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
     if (MPP_OK != ret)
         ALOGE("failed to enqueue input_task");
 
+    mInBufLen = buf_len;
+
 SEND_OUT:
     if (pkt_buf) {
         mpp_buffer_put(pkt_buf);
@@ -370,6 +394,11 @@ SEND_OUT:
     if (frm_buf) {
         mpp_buffer_put(frm_buf);
         frm_buf = NULL;
+    }
+
+    if (MPP_OK != ret) {
+        mpp_frame_deinit(&frame);
+        frame = NULL;
     }
 
     return ret;

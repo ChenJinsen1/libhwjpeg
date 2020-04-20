@@ -57,6 +57,7 @@ private:
     MppApi          *mMpi;
 
     int             mInitOK;
+    size_t          mInBufLen;
 
     // bit per pixel
     float           mBpp;
@@ -77,6 +78,8 @@ private:
     /* Dump input & output for debug */
     FILE            *mInputFile;
     FILE            *mOutputFile;
+
+    bool reinitMppDecoder();
 
     void setup_output_frame_from_mpp_frame(OutputFrame_t *oframe, MppFrame mframe);
     MPP_RET crop_output_frame_if_neccessary(OutputFrame_t *oframe);
