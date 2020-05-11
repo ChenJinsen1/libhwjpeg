@@ -49,7 +49,9 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mMppCtx(NULL),
     mMpi(NULL),
     mInitOK(0),
-    mInBufLen(0),
+    mFdOutput(false),
+    mDecWidth(0),
+    mDecHeight(0),
     mPackets(NULL),
     mFrames(NULL),
     mPacketGroup(NULL),
@@ -73,7 +75,7 @@ MpiJpegDecoder::MpiJpegDecoder() :
     }
 
     if (mpi_dec_debug & DEBUG_RECORD_OUT) {
-        mOutputFile = fopen("/data/dec_output.yuv", "wb+");
+        mOutputFile = fopen("/data/dec_output.yuv", "wa+");
         if (mOutputFile) {
             ALOGD("start dump output yuv to /data/dec_output.yuv");
         }
@@ -118,7 +120,6 @@ bool MpiJpegDecoder::reinitMppDecoder()
     MPP_RET ret         = MPP_OK;
 
     MppParam param      = NULL;
-    uint32_t need_split = 1;
     // non-block call
     MppPollType timeout = MPP_POLL_NON_BLOCK;
 
@@ -130,14 +131,6 @@ bool MpiJpegDecoder::reinitMppDecoder()
     ret = mpp_create(&mMppCtx, &mMpi);
     if (MPP_OK != ret) {
         ALOGE("failed to create mpp context");
-        goto FAIL;
-    }
-
-    // NOTE: decoder split mode need to be set before init
-    param = &need_split;
-    ret = mMpi->control(mMppCtx, MPP_DEC_SET_PARSER_SPLIT_MODE, param);
-    if (MPP_OK != ret) {
-        ALOGE("failed to set mpp split mode");
         goto FAIL;
     }
 
@@ -238,7 +231,6 @@ void MpiJpegDecoder::setup_output_frame_from_mpp_frame(
 
         oframe->MemVirAddr = (uint8_t*)ptr;
         oframe->MemPhyAddr = fd;
-
         oframe->OutputSize = oframe->FrameWidth * oframe->FrameHeight * mBpp;
     }
 }
@@ -285,7 +277,8 @@ MPP_RET MpiJpegDecoder::crop_output_frame_if_neccessary(OutputFrame_t *oframe)
     return ret;
 }
 
-MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
+MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len,
+                                          uint32_t outPhyAddr)
 {
     MPP_RET ret         = MPP_OK;
     /* input packet and output frame */
@@ -301,15 +294,6 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
 
     if (!mInitOK)
         return MPP_ERR_VPU_CODEC_INIT;
-
-    if (mPackets->list_size() > 5)
-        return MPP_ERR_BUFFER_FULL;
-
-    /* Reinit mpp decoder when get resolution or format info-change */
-    if (mInBufLen != 0 && mInBufLen != buf_len) {
-        ALOGD("found resolution info-change, start reinit mpp decoder.");
-        reinitMppDecoder();
-    }
 
     // NOTE: The size of output frame and input packet depends on JPEG
     // dimens, so we get JPEG dimens from file header first.
@@ -327,6 +311,13 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
     hor_stride = _ALIGN(pic_width, 16);
     ver_stride = _ALIGN(pic_height, 16);
 
+    /* Reinit mpp decoder when get resolution or format info-change */
+    if (mDecWidth != 0 && mDecHeight != 0
+        && (mDecWidth != pic_width || mDecHeight != pic_height)) {
+        ALOGD("found resolution info-change, start reinit mpp decoder.");
+        reinitMppDecoder();
+    }
+
     ret = mpp_buffer_get(mPacketGroup, &pkt_buf, buf_len);
     if (MPP_OK != ret) {
         ALOGE("failed to get buffer for input packet ret %d", ret);
@@ -340,25 +331,51 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
     mPackets->add_at_tail(&pkt, sizeof(pkt));
     mPackets->unlock();
 
+    if (outPhyAddr > 0) {
+        mFdOutput = is_valid_dma_fd(outPhyAddr);
+        if (!mFdOutput)
+            ALOGW("output address fd %d not a valid dma fd,"
+                  "change allocated by mpp-decoder", outPhyAddr);
+    } else {
+        mFdOutput = false;
+    }
+
     ret = mpp_frame_init(&frame); /* output frame */
     if (MPP_OK != ret) {
         ALOGE("failed to init output frame");
         goto SEND_OUT;
     }
 
-    /*
-     * NOTE: For jpeg could have YUV420 and ARGB the buffer should be
-     * larger for output. And the buffer dimension should align to 16.
-     * YUV420 buffer is 3/2 times of w*h.
-     * YUV422 buffer is 2 times of w*h.
-     * AGRB buffer is 4 times of w*h.
-     */
-    ret = mpp_buffer_get(mFrameGroup, &frm_buf,
-                         hor_stride * ver_stride * (int)(mBpp + 0.5));
-    if (MPP_OK != ret) {
-        ALOGE("failed to get buffer for output frame ret %d", ret);
-        goto SEND_OUT;
+    if (mFdOutput) {
+        /* try import output fd to vpu */
+        MppBufferInfo outputCommit;
+
+        memset(&outputCommit, 0, sizeof(outputCommit));
+        outputCommit.type = MPP_BUFFER_TYPE_ION;
+        outputCommit.fd = outPhyAddr;
+        outputCommit.size = hor_stride * ver_stride * 2; // YUV420SP
+
+        ret = mpp_buffer_import(&frm_buf, &outputCommit);
+        if (MPP_OK != ret) {
+            ALOGE("import output buffer failed");
+            goto SEND_OUT;
+        }
+    } else {
+        /*
+         * NOTE: For jpeg could have YUV420 and ARGB the buffer should be
+         * larger for output. And the buffer dimension should align to 16.
+         * YUV420 buffer is 3/2 times of w*h.
+         * YUV422 buffer is 2 times of w*h.
+         * AGRB buffer is 4 times of w*h.
+         */
+        ret = mpp_buffer_get(mFrameGroup, &frm_buf,
+                             hor_stride * ver_stride * (int)(mBpp + 0.5));
+        if (MPP_OK != ret) {
+            ALOGE("failed to get buffer for output frame ret %d", ret);
+            goto SEND_OUT;
+        }
     }
+
     mpp_frame_set_buffer(frame, frm_buf);
 
     /* start queue input task */
@@ -383,7 +400,8 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len)
     if (MPP_OK != ret)
         ALOGE("failed to enqueue input_task");
 
-    mInBufLen = buf_len;
+    mDecWidth = pic_width;
+    mDecHeight = pic_height;
 
 SEND_OUT:
     if (pkt_buf) {
@@ -482,6 +500,7 @@ void MpiJpegDecoder::deinitOutputFrame(OutputFrame_t *aframeOut)
 bool MpiJpegDecoder::decodePacket(char* data, size_t size, OutputFrame_t *frameOut)
 {
     MPP_RET ret = MPP_OK;
+
     if (NULL == data) {
         ALOGE("invalid input: data: %p", data);
         return false;
@@ -489,13 +508,12 @@ bool MpiJpegDecoder::decodePacket(char* data, size_t size, OutputFrame_t *frameO
 
     time_start_record();
 
-    ret = decode_sendpacket(data, size);
+    ret = decode_sendpacket(data, size, frameOut->outputPhyAddr);
     if (MPP_OK != ret) {
         ALOGE("failed to prepare decoder");
         goto DECODE_OUT;
     }
 
-    memset(frameOut, 0, sizeof(OutputFrame_t));
     ret = decode_getoutframe(frameOut);
     if (MPP_OK != ret) {
         ALOGE("failed to get output frame");
@@ -522,6 +540,7 @@ bool MpiJpegDecoder::decodeFile(const char *input_file, const char *output_file)
     if (MPP_OK != ret)
         goto DECODE_OUT;
 
+    memset(&frameOut, 0, sizeof(OutputFrame_t));
     if (!decodePacket(buf, buf_size, &frameOut)) {
         ALOGE("failed to decode input packet");
         goto DECODE_OUT;

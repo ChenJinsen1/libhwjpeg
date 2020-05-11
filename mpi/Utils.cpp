@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <drmrga.h>
 #include <RgaApi.h>
+#include <fcntl.h>
 #include "mpp_mem.h"
 #include "Utils.h"
 
@@ -360,5 +361,18 @@ MPP_RET fill_yuv_image(uint8_t *buf, int width, int height,
         ret = MPP_NOK;
     } break;
     }
+    return ret;
+}
+
+int is_valid_dma_fd(int fd)
+{
+    int ret = 1;
+    /* detect input file handle */
+    int fs_flag = fcntl(fd, F_GETFL, NULL);
+    int fd_flag = fcntl(fd, F_GETFD, NULL);
+    if (fs_flag == -1 || fd_flag == -1) {
+        ret = 0;
+    }
+
     return ret;
 }

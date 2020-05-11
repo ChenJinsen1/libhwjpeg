@@ -531,6 +531,11 @@ bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn,
 
     ALOGV("start encode frame-%dx%d", width, height);
 
+    if (!is_valid_dma_fd(aInfoIn->inputPhyAddr)) {
+        ALOGW("encodeImageFD get invalid dma fd, please check it.");
+        return false;
+    }
+
     /* update encode quality and config before encode */
     updateEncodeCfg(width, height, aInfoIn->format, aInfoIn->qLvl);
 

@@ -11,6 +11,15 @@ public:
     ~MpiJpegDecoder();
 
     typedef struct {
+        /**************** Decode-Input  *****************/
+        /*
+         * Output address memory allocated by mpp-decoder default. You can
+         * designated the "outputPhyAddr" to specifies the decoded output
+         * address.
+         */
+        uint32_t   outputPhyAddr;
+
+        /**************** Decode-Ouput  *****************/
         /*
          * NOTE: Since the output frame buffer send to vpu is aligned, it is
          * neccessary to crop output with JPEG image dimens.
@@ -41,7 +50,8 @@ public:
      */
     void deinitOutputFrame(OutputFrame_t *aframeOut);
 
-    MPP_RET decode_sendpacket(char* input_buf, size_t buf_len);
+    MPP_RET decode_sendpacket(char* input_buf, size_t buf_len,
+                              uint32_t outPhyAddr = 0);
     MPP_RET decode_getoutframe(OutputFrame_t *aframeOut);
 
     bool decodePacket(char* data, size_t size, OutputFrame_t *aframeOut);
@@ -57,8 +67,9 @@ private:
     MppApi          *mMpi;
 
     int             mInitOK;
-    size_t          mInBufLen;
-
+    bool            mFdOutput;
+    int             mDecWidth;
+    int             mDecHeight;
     // bit per pixel
     float           mBpp;
     int             mOutputFmt;

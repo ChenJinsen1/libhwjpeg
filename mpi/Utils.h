@@ -25,4 +25,6 @@ MPP_RET fill_yuv_image(uint8_t *buf, int width, int height,
                        int hor_stride, int ver_stride, MppFrameFormat fmt,
                        int frame_count);
 
+int is_valid_dma_fd(int fd);
+
 #endif //__UTILS_H__
