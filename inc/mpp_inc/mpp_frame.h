@@ -157,15 +157,17 @@ typedef enum {
      * the P010_10LE/P010_10BE
      */
     MPP_FMT_YUV420SP_10BIT,
-    MPP_FMT_YUV422SP,                                   /* YYYY... UVUV... (NV24)   */
+    MPP_FMT_YUV422SP,                                   /* YYYY... UVUV... (NV16)   */
     MPP_FMT_YUV422SP_10BIT,                             ///< Not part of ABI
     MPP_FMT_YUV420P,                                    /* YYYY... U...V...  (I420) */
     MPP_FMT_YUV420SP_VU,                                /* YYYY... VUVUVU... (NV21) */
     MPP_FMT_YUV422P,                                    /* YYYY... UU...VV...(422P) */
-    MPP_FMT_YUV422SP_VU,                                /* YYYY... VUVUVU... (NV42) */
+    MPP_FMT_YUV422SP_VU,                                /* YYYY... VUVUVU... (NV61) */
     MPP_FMT_YUV422_YUYV,                                /* YUYVYUYV... (YUY2)       */
+    MPP_FMT_YUV422_YVYU,                                /* YVYUYVYU... (YVY2)       */
     MPP_FMT_YUV422_UYVY,                                /* UYVYUYVY... (UYVY)       */
-    MPP_FMT_YUV400SP,                                   /* YYYY...                  */
+    MPP_FMT_YUV422_VYUY,                                /* VYUYVYUY... (VYUY)       */
+    MPP_FMT_YUV400,                                     /* YYYY...                  */
     MPP_FMT_YUV440SP,                                   /* YYYY... UVUV...          */
     MPP_FMT_YUV411SP,                                   /* YYYY... UV...            */
     MPP_FMT_YUV444SP,                                   /* YYYY... UVUVUVUV...      */
@@ -182,6 +184,8 @@ typedef enum {
     MPP_FMT_BGR101010,                                  /* 30-bit RGB               */
     MPP_FMT_ARGB8888,                                   /* 32-bit RGB               */
     MPP_FMT_ABGR8888,                                   /* 32-bit RGB               */
+    MPP_FMT_BGRA8888,                                   /* 32-bit RGB               */
+    MPP_FMT_RGBA8888,                                   /* 32-bit RGB               */
     MPP_FMT_RGB_BUTT,
     /* simliar to I420, but Pixels are grouped in macroblocks of 8x4 size  */
     MPP_FMT_YUV420_8Z4      = MPP_FRAME_FMT_COMPLEX,

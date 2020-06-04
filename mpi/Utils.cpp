@@ -272,6 +272,8 @@ MPP_RET read_yuv_image(uint8_t *dst, uint8_t *src, int width, int height,
             src += width / 2;
         }
     } break;
+    case MPP_FMT_RGBA8888 :
+    case MPP_FMT_ABGR8888 :
     case MPP_FMT_ARGB8888 : {
         for (row = 0; row < height; row++) {
             memcpy(buf_y + row * hor_stride * 4, src, width * 4);
@@ -284,6 +286,13 @@ MPP_RET read_yuv_image(uint8_t *dst, uint8_t *src, int width, int height,
             memcpy(buf_y + row * hor_stride * 2, src, width * 2);
             src += width * 2;
         }
+    } break;
+    case MPP_FMT_RGB888 :
+    case MPP_FMT_BGR888 : {
+    for (row = 0; row < height; row++) {
+        memcpy(buf_y + row * hor_stride * 3, src, width * 3);
+        src += width * 3;
+    }
     } break;
     default : {
         ALOGE("read image do not support fmt %d", fmt);

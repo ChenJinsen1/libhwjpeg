@@ -387,11 +387,11 @@ bool MpiJpegEncoder::encodeFile(const char *input_file, const char *output_file)
     if (MPP_OK != ret)
         ALOGE("failed to dump packet to file %s", output_file);
 
-    deinitOutputPacket(&pktOut);
-    flushBuffer();
-
     ALOGD("JPEG encode success get output file %s with size %d",
           output_file, pktOut.size);
+
+    deinitOutputPacket(&pktOut);
+    flushBuffer();
 
 ENCODE_OUT:
     if (buf)
