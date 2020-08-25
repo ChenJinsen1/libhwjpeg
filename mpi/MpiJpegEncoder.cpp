@@ -104,7 +104,9 @@ MpiJpegEncoder::~MpiJpegEncoder()
 
 bool MpiJpegEncoder::prepareEncoder()
 {
-    MPP_RET ret = MPP_OK;
+    MPP_RET ret         = MPP_OK;
+    MppParam param      = NULL;
+    MppPollType timeout = MPP_POLL_BLOCK;
 
     if (mInitOK)
         return true;
@@ -119,6 +121,25 @@ bool MpiJpegEncoder::prepareEncoder()
     if (MPP_OK != ret) {
         ALOGE("failed to init mpp");
         goto FAIL;
+    }
+
+    // NOTE: timeout value please refer to MppPollType definition
+    // 0   - non-block call (default)
+    // -1   - block call
+    // +val - timeout value in ms
+    {
+        param = &timeout;
+        ret = mMpi->control(mMppCtx, MPP_SET_OUTPUT_TIMEOUT, param);
+        if (MPP_OK != ret) {
+            ALOGE("failed to set output timeout %d ret %d", timeout, ret);
+            goto FAIL;
+        }
+
+        ret = mMpi->control(mMppCtx, MPP_SET_INPUT_TIMEOUT, param);
+        if (MPP_OK != ret) {
+            ALOGE("failed to set input timeout %d ret %d", timeout, ret);
+            goto FAIL;
+        }
     }
 
     mPackets = new QList((node_destructor)mpp_packet_deinit);
