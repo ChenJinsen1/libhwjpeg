@@ -2,6 +2,7 @@
 #define LOG_TAG "MpiJpegDecoder"
 #include <utils/Log.h>
 
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <mpp_err.h>
@@ -17,7 +18,7 @@
 
 //#define OUTPUT_CROP
 
-uint32_t mpi_dec_debug = 0;
+uint32_t dec_debug = 0;
 
 #define _ALIGN(x, a)            (((x)+(a)-1)&~((a)-1))
 
@@ -30,14 +31,14 @@ static DebugTimeInfo time_info;
 
 static void time_start_record()
 {
-    if (mpi_dec_debug & DEBUG_TIMING) {
+    if (dec_debug & DEBUG_TIMING) {
         gettimeofday(&time_info.start, NULL);
     }
 }
 
 static void time_end_record(const char *task)
 {
-    if (mpi_dec_debug & DEBUG_TIMING) {
+    if (dec_debug & DEBUG_TIMING) {
         gettimeofday(&time_info.end, NULL);
         ALOGD("%s consumes %ld ms", task,
               (time_info.end.tv_sec  - time_info.start.tv_sec)  * 1000 +
@@ -52,6 +53,7 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mFdOutput(false),
     mDecWidth(0),
     mDecHeight(0),
+    mPacketCount(0),
     mPackets(NULL),
     mFrames(NULL),
     mPacketGroup(NULL),
@@ -65,22 +67,7 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mOutputFmt = OUT_FORMAT_YUV420SP;
     mBpp = 1.5;
 
-    get_env_u32("mpi_dec_debug", &mpi_dec_debug, 0);
-
-    if (mpi_dec_debug & DEBUG_RECORD_IN) {
-        mInputFile = fopen("/data/dec_input.jpg", "wb+");
-        if (mInputFile) {
-            ALOGD("start dump input jpeg to /data/dec_input.jpg");
-        }
-    }
-
-    if (mpi_dec_debug & DEBUG_RECORD_OUT) {
-        mOutputFile = fopen("/data/dec_output.yuv", "wa+");
-        if (mOutputFile) {
-            ALOGD("start dump output yuv to /data/dec_output.yuv");
-        }
-    }
-
+    get_env_u32("hwjpeg_dec_debug", &dec_debug, 0);
 }
 
 MpiJpegDecoder::~MpiJpegDecoder()
@@ -304,7 +291,18 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len,
     }
 
     /* dump input data if neccessary */
-    dump_data_to_file((uint8_t*)input_buf, (int)buf_len, mInputFile);
+    if ((dec_debug & DEBUG_RECORD_IN) && (mPacketCount % 10 == 0)) {
+        char fileName[40];
+
+        sprintf(fileName, "/data/video/dec_input_%d.jpg", mPacketCount);
+        mInputFile = fopen(fileName, "wb");
+        if (mInputFile) {
+            dump_data_to_file((uint8_t*)input_buf, (int)buf_len, mInputFile);
+            ALOGD("dump input jpeg to %s", fileName);
+        } else {
+            ALOGD("failed to open input file, err - %s", strerror(errno));
+        }
+    }
 
     ALOGV("get JPEG dimens: %dx%d", pic_width, pic_height);
 
@@ -404,6 +402,8 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len,
     mDecHeight = pic_height;
 
 SEND_OUT:
+    mPacketCount++;
+
     if (pkt_buf) {
         mpp_buffer_put(pkt_buf);
         pkt_buf = NULL;
@@ -453,7 +453,19 @@ MPP_RET MpiJpegDecoder::decode_getoutframe(OutputFrame_t *aFrameOut)
         setup_output_frame_from_mpp_frame(aFrameOut, frame_out);
 
         /* dump output buffer if neccessary */
-        dump_data_to_file(aFrameOut->MemVirAddr, aFrameOut->OutputSize, mOutputFile);
+        if ((dec_debug & DEBUG_RECORD_OUT) && mPacketCount % 10 == 0) {
+            char fileName[40];
+
+            sprintf(fileName, "/data/video/dec_output_%d.yuv", mPacketCount);
+            mOutputFile = fopen(fileName, "wb");
+            if (mOutputFile) {
+                dump_data_to_file(aFrameOut->MemVirAddr,
+                                  aFrameOut->OutputSize, mOutputFile);
+                ALOGD("dump output yuv to %s", fileName);
+            } else {
+                ALOGD("failed to open output file, err - %s", strerror(errno));
+            }
+        }
 
         ret = crop_output_frame_if_neccessary(aFrameOut);
         if (MPP_OK != ret)

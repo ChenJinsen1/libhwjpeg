@@ -93,6 +93,7 @@ private:
     MppApi          *mMpi;
 
     int             mInitOK;
+    uint32_t        mFrameCount;
 
     /*
      * Format of the raw input data for encode

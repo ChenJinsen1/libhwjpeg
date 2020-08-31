@@ -2,6 +2,7 @@
 #define LOG_TAG "MpiJpegEncoder"
 #include <utils/Log.h>
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,7 +14,7 @@
 #include "QList.h"
 #include "MpiJpegEncoder.h"
 
-uint32_t mpi_enc_debug = 0;
+uint32_t enc_debug = 0;
 
 /* APP0 header length of encoded picture default */
 static const int APP0_DEFAULT_LEN = 20;
@@ -29,14 +30,14 @@ static DebugTimeInfo time_info;
 
 static void time_start_record()
 {
-    if (mpi_enc_debug & DEBUG_TIMING) {
+    if (enc_debug & DEBUG_TIMING) {
         gettimeofday(&time_info.start, NULL);
     }
 }
 
 static void time_end_record(const char *task)
 {
-    if (mpi_enc_debug & DEBUG_TIMING) {
+    if (enc_debug & DEBUG_TIMING) {
         gettimeofday(&time_info.end, NULL);
         ALOGD("%s consumes %ld ms", task,
               (time_info.end.tv_sec  - time_info.start.tv_sec)  * 1000 +
@@ -48,6 +49,7 @@ MpiJpegEncoder::MpiJpegEncoder() :
     mMppCtx(NULL),
     mMpi(NULL),
     mInitOK(0),
+    mFrameCount(0),
     mInputWidth(0),
     mInputHeight(0),
     mEncodeQuality(-1),
@@ -61,21 +63,7 @@ MpiJpegEncoder::MpiJpegEncoder() :
     /* input format set to YUV420SP default */
     mInputFmt = INPUT_FMT_YUV420SP;
 
-    get_env_u32("mpi_enc_debug", &mpi_enc_debug, 0);
-
-    if (mpi_enc_debug & DEBUG_RECORD_IN) {
-        mInputFile = fopen("/data/enc_input.yuv", "wb+");
-        if (mInputFile) {
-            ALOGD("start dump input yuv to /data/enc_input.yuv");
-        }
-    }
-
-    if (mpi_enc_debug & DEBUG_RECORD_OUT) {
-        mOutputFile = fopen("/data/enc_output.jpg", "wb+");
-        if (mOutputFile) {
-            ALOGD("start dump output jpeg to /data/enc_output.jpg");
-        }
-    }
+    get_env_u32("hwjpeg_enc_debug", &enc_debug, 0);
 }
 
 MpiJpegEncoder::~MpiJpegEncoder()
@@ -341,7 +329,18 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
     mpp_frame_set_buffer(frame, frm_buf);
 
     /* dump input frame at fp_input if neccessary */
-    dump_mpp_frame_to_file(frame, mInputFile);
+    if ((enc_debug & DEBUG_RECORD_IN) && (mFrameCount % 10 == 0)) {
+        char fileName[40];
+
+        sprintf(fileName, "/data/video/enc_input_%d.yuv", mFrameCount);
+        mInputFile = fopen(fileName, "wb");
+        if (mInputFile) {
+            dump_mpp_frame_to_file(frame, mInputFile);
+            ALOGD("dump input yuv to %s", fileName);
+        } else {
+            ALOGD("failed to open input file, err - %s", strerror(errno));
+        }
+    }
 
     ret = mMpi->encode_put_frame(mMppCtx, frame);
     if (MPP_OK != ret) {
@@ -363,7 +362,18 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
         aPktOut->packetHandler = packet;
 
         /* dump output packet at mOutputFile if neccessary */
-        dump_mpp_packet_to_file(packet, mOutputFile);
+        if ((enc_debug & DEBUG_RECORD_OUT) && (mFrameCount % 10 == 0)) {
+            char fileName[40];
+
+            sprintf(fileName, "/data/video/enc_output_%d.jpg", mFrameCount);
+            mOutputFile = fopen(fileName, "wb");
+            if (mOutputFile) {
+                dump_mpp_packet_to_file(packet, mOutputFile);
+                ALOGD("dump output jpg to %s", fileName);
+            } else {
+                ALOGD("failed to open output file, err - %s", strerror(errno));
+            }
+        }
 
         mPackets->lock();
         mPackets->add_at_tail(&packet, sizeof(packet));
@@ -378,6 +388,7 @@ ENCODE_OUT:
         frm_buf = NULL;
     }
 
+    mFrameCount++;
     time_end_record("encode frame");
 
     return ret == MPP_OK ? true : false;
@@ -728,7 +739,6 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
 {
     bool ret;
     RkHeaderData hData;
-    int input_size;
 
     if (!mInitOK) {
         ALOGW("Please prepare encoder first before encode");
@@ -737,9 +747,21 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
 
     time_start_record();
 
-    /* dump input data if neccessary */
-    input_size = getMPPFrameSize(inInfo->format, inInfo->width, inInfo->height);
-    dump_data_to_file(inInfo->inputVirAddr, input_size, mInputFile);
+    /* dump input data at fp_input if neccessary */
+    if ((enc_debug & DEBUG_RECORD_IN) && (mFrameCount % 10 == 0)) {
+        char fileName[40];
+        int inSize;
+
+        sprintf(fileName, "/data/video/enc_input_%d.yuv", mFrameCount);
+        mInputFile = fopen(fileName, "wb");
+        if (mInputFile) {
+            inSize = getMPPFrameSize(inInfo->format, inInfo->width, inInfo->height);
+            dump_data_to_file(inInfo->inputVirAddr, inSize, mInputFile);
+            ALOGD("dump input yuv to %s", fileName);
+        } else {
+            ALOGD("failed to open input file, err - %s", strerror(errno));
+        }
+    }
 
     memset(&hData, 0, sizeof(RkHeaderData));
     hData.exifInfo = (RkExifInfo*)inInfo->exifInfo;
@@ -775,7 +797,18 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
     outPkt->size = outPkt->size + hData.header_len - APP0_DEFAULT_LEN;
 
     /* dump output buffer if neccessary */
-    dump_data_to_file(outPkt->data, outPkt->size, mOutputFile);
+    if ((enc_debug & DEBUG_RECORD_OUT) && (mFrameCount % 10 == 0)) {
+        char fileName[40];
+
+        sprintf(fileName, "/data/video/enc_output_%d.jpg", mFrameCount);
+        mOutputFile = fopen(fileName, "wb");
+        if (mOutputFile) {
+            dump_data_to_file(outPkt->data, outPkt->size, mOutputFile);
+            ALOGD("dump output jpg to %s", fileName);
+        } else {
+            ALOGD("failed to open output file, err - %s", strerror(errno));
+        }
+    }
 
     ALOGD("task encode success get outputFileLen - %d", outPkt->size);
 
@@ -785,6 +818,7 @@ TASK_OUT:
     if (hData.header_buf)
         free(hData.header_buf);
 
+    mFrameCount++;
     time_end_record("encode task");
 
     return ret;

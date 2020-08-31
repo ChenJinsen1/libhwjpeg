@@ -73,6 +73,7 @@ private:
     // bit per pixel
     float           mBpp;
     int             mOutputFmt;
+    uint32_t        mPacketCount;
 
     QList           *mPackets;
     QList           *mFrames;

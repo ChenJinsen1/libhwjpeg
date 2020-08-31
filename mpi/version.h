@@ -1,1 +1,1 @@
-#define GIT_INFO "735cb5a author: Chen Jinsen Initialize directory structure and readme file"
+#define GIT_INFO "8b4748d author: Chen Jinsen [MpiJpegEncoder]: fix timeout fail with larger resolution input"
