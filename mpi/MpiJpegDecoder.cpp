@@ -61,7 +61,7 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mInputFile(NULL),
     mOutputFile(NULL)
 {
-    ALOGI("verison - %s", GIT_INFO);
+    ALOGI("version - %s", GIT_INFO);
 
     // Output Format set to YUV420SP default
     mOutputFmt = OUT_FORMAT_YUV420SP;
@@ -324,6 +324,7 @@ MPP_RET MpiJpegDecoder::decode_sendpacket(char *input_buf, size_t buf_len,
 
     mpp_packet_init_with_buffer(&pkt, pkt_buf);
     mpp_buffer_write(pkt_buf, 0, input_buf, buf_len);
+    mpp_packet_set_length(pkt, buf_len);
 
     mPackets->lock();
     mPackets->add_at_tail(&pkt, sizeof(pkt));
