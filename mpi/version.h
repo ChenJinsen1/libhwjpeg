@@ -1,1 +1,1 @@
-#define GIT_INFO "8b4748d author: Chen Jinsen [MpiJpegEncoder]: fix timeout fail with larger resolution input"
+#define GIT_INFO "e582616 author: Chen Jinsen [MpiJpegDecoder]: set input packet lenth before decode"

@@ -59,8 +59,8 @@ public:
 
 private:
     typedef enum {
-        OUT_FORMAT_ARGB      =  1,
-        OUT_FORMAT_YUV420SP  =  5,
+        OUT_FORMAT_YUV420SP =  MPP_FMT_YUV420SP,
+        OUT_FORMAT_ARGB     =  MPP_FMT_ARGB8888,
     } OutputFormat;
 
     MppCtx          mMppCtx;
