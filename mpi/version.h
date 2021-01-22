@@ -1,1 +1,1 @@
-#define GIT_INFO "e582616 author: Chen Jinsen [MpiJpegDecoder]: set input packet lenth before decode"
+#define GIT_INFO "57c06f2 author: Chen Jinsen [MpiJpegDecoder] update output format for match mpp"

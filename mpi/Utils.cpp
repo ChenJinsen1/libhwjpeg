@@ -2,6 +2,7 @@
 #define LOG_TAG "Utils"
 #include <utils/Log.h>
 
+#include <sys/system_properties.h>
 #include <string.h>
 #include <errno.h>
 #include <drmrga.h>
@@ -373,6 +374,55 @@ MPP_RET fill_yuv_image(uint8_t *buf, int width, int height,
     return ret;
 }
 
+/*
+ * NOTE: __system_property_set only available after android-21
+ * So the library should compiled on latest ndk
+ */
+int32_t env_get_u32(const char *name, uint32_t *value, uint32_t default_value) {
+   char prop[PROP_VALUE_MAX + 1];
+   int len = __system_property_get(name, prop);
+   if (len > 0) {
+       char *endptr;
+       int base = (prop[0] == '0' && prop[1] == 'x') ? (16) : (10);
+       errno = 0;
+       *value = strtoul(prop, &endptr, base);
+       if (errno || (prop == endptr)) {
+           errno = 0;
+           *value = default_value;
+       }
+   } else {
+       *value = default_value;
+   }
+   return 0;
+}
+
+int32_t env_get_str(const char *name, const char **value, const char *default_value) {
+   static unsigned char env_str[2][PROP_VALUE_MAX + 1];
+   static int32_t env_idx = 0;
+   char *prop = reinterpret_cast<char *>(env_str[env_idx]);
+   int len = __system_property_get(name, prop);
+   if (len > 0) {
+       *value  = prop;
+       env_idx = !env_idx;
+   } else {
+       *value = default_value;
+   }
+   return 0;
+}
+
+int32_t env_set_u32(const char *name, uint32_t value) {
+   char buf[PROP_VALUE_MAX + 1 + 2];
+   snprintf(buf, sizeof(buf), "0x%x", value);
+   int len = __system_property_set(name, buf);
+   return (len) ? (0) : (-1);
+}
+
+int32_t env_set_str(const char *name, char *value) {
+   int len = __system_property_set(name, value);
+   return (len) ? (0) : (-1);
+}
+
+
 int is_valid_dma_fd(int fd)
 {
     int ret = 1;
@@ -384,4 +434,21 @@ int is_valid_dma_fd(int fd)
     }
 
     return ret;
+}
+
+void set_performance_mode(int on) {
+    int fd = -1;
+
+    fd = open("/sys/class/devfreq/dmc/system_status", O_WRONLY);
+    if (fd  == -1) {
+        ALOGD("failed to open /sys/class/devfreq/dmc/system_status");
+    }
+
+    if (fd != -1) {
+        ALOGD("%s performance mode", (on == 1) ? "config" : "clear");
+        write(fd, (on == 1) ? "p" : "n", 1);
+        close(fd);
+    } else {
+        ALOGD("failed to open /sys/class/devfreq/dmc/system_status");
+    }
 }

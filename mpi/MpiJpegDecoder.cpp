@@ -67,11 +67,15 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mOutputFmt = OUT_FORMAT_YUV420SP;
     mBpp = 1.5;
 
+    set_performance_mode(1);
+
     get_env_u32("hwjpeg_dec_debug", &dec_debug, 0);
 }
 
 MpiJpegDecoder::~MpiJpegDecoder()
 {
+    set_performance_mode(0);
+
     if (mMppCtx) {
         mpp_destroy(mMppCtx);
         mMppCtx = NULL;

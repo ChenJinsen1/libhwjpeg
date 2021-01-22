@@ -25,6 +25,13 @@ MPP_RET fill_yuv_image(uint8_t *buf, int width, int height,
                        int hor_stride, int ver_stride, MppFrameFormat fmt,
                        int frame_count);
 
+int32_t env_get_u32(const char *name, uint32_t *value, uint32_t default_value);
+int32_t env_get_str(const char *name, const char **value, const char *default_value);
+int32_t env_set_u32(const char *name, uint32_t value);
+int32_t env_set_str(const char *name, char *value);
+
 int is_valid_dma_fd(int fd);
+
+void set_performance_mode(int on);
 
 #endif //__UTILS_H__
