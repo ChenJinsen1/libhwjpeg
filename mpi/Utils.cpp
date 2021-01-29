@@ -3,6 +3,8 @@
 #include <utils/Log.h>
 
 #include <sys/system_properties.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
 #include <drmrga.h>
@@ -144,6 +146,19 @@ void dump_data_to_file(uint8_t *data, int size, FILE *fp)
     fflush(fp);
 }
 
+MPP_RET dump_dma_fd_to_file(int fd, size_t size, FILE *fp)
+{
+    void *ptr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (ptr != NULL) {
+        fwrite(ptr, 1, size, fp);
+        fflush(fp);
+        return MPP_OK;
+    } else {
+        ALOGE("failed to map fd value %d", fd);
+        return MPP_NOK;
+    }
+}
+
 MPP_RET get_file_ptr(const char *file_name, char **buf, size_t *size)
 {
     FILE *fp = NULL;
@@ -201,13 +216,8 @@ MPP_RET crop_yuv_image(uint8_t *src, uint8_t *dst, int src_width, int src_height
 
     if (!rga_init) {
         RgaInit(&rga_ctx);
-        if (NULL == rga_ctx) {
-            ALOGW("failed to init rga ctx");
-            return MPP_NOK;
-        } else {
-            ALOGD("init rga ctx done");
-            rga_init = 1;
-        }
+        rga_init = 1;
+        ALOGD("init rga ctx done");
     }
 
     srcFormat = dstFormat = HAL_PIXEL_FORMAT_YCrCb_NV12;
@@ -423,17 +433,16 @@ int32_t env_set_str(const char *name, char *value) {
 }
 
 
-int is_valid_dma_fd(int fd)
+bool is_valid_dma_fd(int fd)
 {
-    int ret = 1;
     /* detect input file handle */
     int fs_flag = fcntl(fd, F_GETFL, NULL);
     int fd_flag = fcntl(fd, F_GETFD, NULL);
     if (fs_flag == -1 || fd_flag == -1) {
-        ret = 0;
+        return false;;
     }
 
-    return ret;
+    return true;
 }
 
 void set_performance_mode(int on) {

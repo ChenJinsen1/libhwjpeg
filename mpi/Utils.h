@@ -10,6 +10,7 @@
 void dump_mpp_frame_to_file(MppFrame frame, FILE *fp);
 void dump_mpp_packet_to_file(MppPacket packet, FILE *fp);
 void dump_data_to_file(uint8_t *data, int size, FILE *fp);
+MPP_RET dump_dma_fd_to_file(int fd, size_t size, FILE *fp);
 
 MPP_RET get_file_ptr(const char *file_name, char **buf, size_t *size);
 MPP_RET dump_ptr_to_file(char *buf, size_t size, const char *output_file);
@@ -30,7 +31,7 @@ int32_t env_get_str(const char *name, const char **value, const char *default_va
 int32_t env_set_u32(const char *name, uint32_t value);
 int32_t env_set_str(const char *name, char *value);
 
-int is_valid_dma_fd(int fd);
+bool is_valid_dma_fd(int fd);
 
 void set_performance_mode(int on);
 

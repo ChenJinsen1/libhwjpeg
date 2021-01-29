@@ -68,6 +68,7 @@ private:
 
     int             mInitOK;
     bool            mFdOutput;
+    bool            mOutputCrop;
     uint32_t        mDecWidth;
     uint32_t        mDecHeight;
     // bit per pixel

@@ -16,8 +16,6 @@
 #include "version.h"
 #include "MpiJpegDecoder.h"
 
-//#define OUTPUT_CROP
-
 uint32_t dec_debug = 0;
 
 #define _ALIGN(x, a)            (((x)+(a)-1)&~((a)-1))
@@ -51,6 +49,7 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mMpi(NULL),
     mInitOK(0),
     mFdOutput(false),
+    mOutputCrop(false),
     mDecWidth(0),
     mDecHeight(0),
     mPacketCount(0),
@@ -70,6 +69,10 @@ MpiJpegDecoder::MpiJpegDecoder() :
     set_performance_mode(1);
 
     get_env_u32("hwjpeg_dec_debug", &dec_debug, 0);
+    if (dec_debug & DEBUG_OUTPUT_CROP) {
+        ALOGD("decoder will crop output.");
+        mOutputCrop = true;
+    }
 }
 
 MpiJpegDecoder::~MpiJpegDecoder()
@@ -230,7 +233,9 @@ MPP_RET MpiJpegDecoder::crop_output_frame_if_neccessary(OutputFrame_t *oframe)
 {
     MPP_RET ret = MPP_OK;
 
-#ifdef OUTPUT_CROP
+    if (!mOutputCrop)
+        return MPP_OK;
+
     uint8_t *src_addr, *dst_addr;
     uint32_t src_width, src_height;
     uint32_t src_wstride, src_hstride;
@@ -263,7 +268,6 @@ MPP_RET MpiJpegDecoder::crop_output_frame_if_neccessary(OutputFrame_t *oframe)
 
         oframe->OutputSize = oframe->DisplayWidth * oframe->DisplayHeight * mBpp;
     }
-#endif
 
     return ret;
 }
@@ -457,24 +461,31 @@ MPP_RET MpiJpegDecoder::decode_getoutframe(OutputFrame_t *aFrameOut)
         memset(aFrameOut, 0, sizeof(OutputFrame_t));
         setup_output_frame_from_mpp_frame(aFrameOut, frame_out);
 
+        ret = crop_output_frame_if_neccessary(aFrameOut);
+        if (MPP_OK != ret)
+            ALOGV("outputFrame crop failed");
+
         /* dump output buffer if neccessary */
         if ((dec_debug & DEBUG_RECORD_OUT) && mPacketCount % 10 == 0) {
             char fileName[40];
 
-            sprintf(fileName, "/data/video/dec_output_%d.yuv", mPacketCount);
+            sprintf(fileName, "/data/video/dec_output_%dx%d_%d.yuv",
+                    aFrameOut->FrameWidth, aFrameOut->FrameHeight, mPacketCount);
             mOutputFile = fopen(fileName, "wb");
             if (mOutputFile) {
-                dump_data_to_file(aFrameOut->MemVirAddr,
-                                  aFrameOut->OutputSize, mOutputFile);
-                ALOGD("dump output yuv to %s", fileName);
+                if (mFdOutput) {
+                    dump_dma_fd_to_file(aFrameOut->MemPhyAddr,
+                                        aFrameOut->OutputSize, mOutputFile);
+                } else {
+                    dump_data_to_file(aFrameOut->MemVirAddr,
+                                      aFrameOut->OutputSize, mOutputFile);
+                }
+                ALOGD("dump output yuv [%dx%d] to %s",
+                      aFrameOut->FrameWidth, aFrameOut->FrameHeight, fileName);
             } else {
                 ALOGD("failed to open output file, err - %s", strerror(errno));
             }
         }
-
-        ret = crop_output_frame_if_neccessary(aFrameOut);
-        if (MPP_OK != ret)
-            ALOGV("outputFrame crop failed");
 
         /* output queue */
         ret = mMpi->enqueue(mMppCtx, MPP_PORT_OUTPUT, task);
