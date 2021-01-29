@@ -1,1 +1,1 @@
-#define GIT_INFO "3c445b5 author: Chen Jinsen [MpiJpegDecoder] add more debug switch"
+#define GIT_INFO "0161028 author: Chen Jinsen [project] add licence declare"
