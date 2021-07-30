@@ -68,7 +68,18 @@ public:
         int thumbQLvl;
 
         void *exifInfo;
+        void *gpsInfo;
     } EncInInfo;
+
+    typedef struct {
+        /* output buffer information */
+        int outputPhyAddr;
+        unsigned char *outputVirAddr;
+        int outBufLen;
+
+        /* output packet hander */
+        OutputPacket_t outPkt;
+    } EncOutInfo;
 
     bool prepareEncoder();
     void flushBuffer();
@@ -84,27 +95,13 @@ public:
     bool encodeFrame(char *data, OutputPacket_t *aPktOut);
     bool encodeFile(const char *input_file, const char *output_file);
 
-
     /*
-     * Encode raw image by commit input fd to the encoder.
+     * designed for Rockchip cameraHal, commit input\output fd for encoder
      *
-     * param[in] aInfoIn    - input parameter for picture encode
-     * param[in] dst_offset - output buffer offset, equals to jpeg header_len
-     * param[out] aPktOut   - pointer to buffer pointer containing output data.
+     * param[in] aInfoIn - pointer to input buffer parameter for encoder
+     * param[in/out] aInfoOut - pointer to output buffer parameter for encoder
      */
-    bool encodeImageFD(EncInInfo *aInfoIn,
-                       int dst_offset, OutputPacket_t *aPktOut);
-
-    /*
-     * ThumbNail encode for a large resolution input image.
-     *
-     * param[in] aInfoIn   - input parameter for thumnNail encode
-     * param[out] outPkt   - pointer to buffer pointer containing output data.
-     */
-    bool encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len);
-
-    /* designed for Rockchip cameraHal, commit input fd for encode */
-    bool encode(EncInInfo *inInfo, OutputPacket_t *outPkt);
+    bool encode(EncInInfo *aInInfo, EncOutInfo *aOutInfo);
 
 private:
     MppCtx          mMppCtx;
@@ -137,10 +134,27 @@ private:
     FILE            *mInputFile;
     FILE            *mOutputFile;
 
+private:
     void updateEncodeQuality(int quant);
+    MPP_RET runFrameEnc(MppFrame in_frame, MppPacket out_packet);
+
     MPP_RET cropInputYUVImage(EncInInfo *aInfoIn, void* outAddr);
 
-    MPP_RET runFrameEnc(MppFrame in_frame, MppPacket out_packet);
+    /*
+     * Encode raw image by commit input fd to the encoder.
+     *
+     * param[in] aInfoIn - pointer to input buffer parameter for encoder
+     * param[in/out] aInfoOut - pointer to output buffer parameter for encoder
+     */
+    bool encodeImageFD(EncInInfo *aInfoIn, EncOutInfo *aInfoOut);
+
+    /*
+     * ThumbNail encode for a large resolution input image.
+     *
+     * param[in] aInfoIn - input parameter for thumnNail encode
+     * param[out] data - pointer to buffer pointer containing output data.
+     */
+    bool encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len);
 };
 
 #endif  // __MPI_JPEG_ENCODER_H__

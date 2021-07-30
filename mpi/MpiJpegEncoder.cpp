@@ -401,6 +401,10 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
     }
 
 ENCODE_OUT:
+    if (frame) {
+        mpp_frame_deinit(&frame);
+        frame = NULL;
+    }
     if (frm_buf) {
         mpp_buffer_put(frm_buf);
         frm_buf = NULL;
@@ -444,8 +448,10 @@ bool MpiJpegEncoder::encodeFile(const char *input_file, const char *output_file)
     flushBuffer();
 
 ENCODE_OUT:
-    if (buf)
+    if (buf) {
         free(buf);
+        buf = NULL;
+    }
 
     return ret == MPP_OK ? true : false;
 }
@@ -561,23 +567,21 @@ MPP_RET MpiJpegEncoder::cropInputYUVImage(EncInInfo *aInfoIn, void* outAddr)
     return ret;
 }
 
-bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn,
-                                   int dst_offset, OutputPacket_t *aPktOut)
+
+bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn, EncOutInfo *aOutInfo)
 {
-    MPP_RET ret         = MPP_OK;
+    MPP_RET ret = MPP_OK;
 
     /* input frame and output packet */
-    MppFrame frame      = NULL;
-    MppBuffer frm_buf   = NULL;
-    MppPacket packet    = NULL;
-    MppBuffer pkt_buf   = NULL;
+    MppFrame  frame   = NULL;
+    MppBuffer frm_buf = NULL;
+    MppPacket packet  = NULL;
+    MppBuffer pkt_buf = NULL;
 
-    int width           = aInfoIn->width;
-    int height          = aInfoIn->height;
-    int h_stride        = _ALIGN(width, 16);
-    int v_stride        = _ALIGN(height, 8);
-    int pkt_size        = 0;
-    int pkt_offset      = 0;
+    int width    = aInfoIn->width;
+    int height   = aInfoIn->height;
+    int h_stride = _ALIGN(width, 16);
+    int v_stride = _ALIGN(height, 8);
 
     ALOGV("start encode frame-%dx%d", width, height);
 
@@ -600,48 +604,47 @@ bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn,
     MppBufferInfo inputCommit;
     memset(&inputCommit, 0, sizeof(MppBufferInfo));
     inputCommit.type = MPP_BUFFER_TYPE_ION;
-    inputCommit.size = getMPPFrameSize(aInfoIn->format, width, height);;
+    inputCommit.size = getMPPFrameSize(aInfoIn->format, width, height);
     inputCommit.fd = aInfoIn->inputPhyAddr;
 
     ret = mpp_buffer_import(&frm_buf, &inputCommit);
     if (MPP_OK != ret) {
-        ALOGE("failed to import input pictrue buffer");
+        ALOGE("failed to import input buffer");
         goto ENCODE_OUT;
     }
     mpp_frame_set_buffer(frame, frm_buf);
 
-    pkt_size = width * height;
-    if (aInfoIn->doThumbNail)
-        pkt_size += aInfoIn->thumbWidth * aInfoIn->thumbHeight;
+     /* try import output fd to vpu */
+    MppBufferInfo outputCommit;
+    memset(&outputCommit, 0, sizeof(MppBufferInfo));
+    outputCommit.type = MPP_BUFFER_TYPE_ION;
+    outputCommit.size = aOutInfo->outBufLen;
+    outputCommit.fd = aOutInfo->outputPhyAddr;
 
-    /*
-     * Encoded picture from vpu carried APP0 header information deault, so
-     * if wants to carried APP1 header instead, remove APP0 header first.
-     */
-    pkt_offset = dst_offset - APP0_DEFAULT_LEN;
-
-    /* allocate output packet buffer */
-    ret = mpp_buffer_get(mMemGroup, &pkt_buf, pkt_size);
+    ret = mpp_buffer_import(&pkt_buf, &outputCommit);
     if (MPP_OK != ret) {
-        ALOGE("failed to get buffer for output packet ret %d", ret);
+        ALOGE("failed to import output buffer");
         goto ENCODE_OUT;
     }
-    /* TODO: set output buffer offset to mpp */
-    //mpp_buffer_set_index(pkt_buf, pkt_offset);
+
     mpp_packet_init_with_buffer(&packet, pkt_buf);
+    /* NOTE: It is important to clear output packet length */
+    mpp_packet_set_length(packet, 0);
 
     ret = runFrameEnc(frame, packet);
     if (MPP_OK == ret) {
-        memset(aPktOut, 0, sizeof(OutputPacket_t));
-        aPktOut->data = (uint8_t*)mpp_packet_get_pos(packet);
-        aPktOut->size = mpp_packet_get_length(packet);
-        aPktOut->packetHandler = packet;
+        OutputPacket_t *pOutPkt = &aOutInfo->outPkt;
+        memset(pOutPkt, 0, sizeof(OutputPacket_t));
+
+        pOutPkt->data = (uint8_t*)mpp_packet_get_pos(packet);
+        pOutPkt->size = mpp_packet_get_length(packet);
+        pOutPkt->packetHandler = packet;
 
         mPackets->lock();
-        mPackets->add_at_tail(&packet, sizeof(packet));
+        mPackets->add_at_tail(&packet, sizeof(pOutPkt));
         mPackets->unlock();
 
-        ALOGV("encod frame get output size %d", aPktOut->size);
+        ALOGV("encod frame get output size %d", pOutPkt->size);
     }
 
 ENCODE_OUT:
@@ -724,6 +727,8 @@ bool MpiJpegEncoder::encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len)
         goto ENCODE_OUT;
     }
     mpp_packet_init_with_buffer(&packet, pkt_buf);
+    /* NOTE: It is important to clear output packet length */
+    mpp_packet_set_length(packet, 0);
 
     ret = runFrameEnc(frame, packet);
     if (MPP_OK == ret) {
@@ -750,13 +755,15 @@ ENCODE_OUT:
     if (frame)
         mpp_frame_deinit(&frame);
 
-    return ret == MPP_OK ? true : false;;
+    return ret == MPP_OK ? true : false;
 }
 
-bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
+bool MpiJpegEncoder::encode(EncInInfo *inInfo, EncOutInfo *outInfo)
 {
     bool ret;
     RkHeaderData hData;
+    OutputPacket_t pktOut;
+    uint8_t *tmpBuf = NULL;
 
     if (!mInitOK) {
         ALOGW("Please prepare encoder first before encode");
@@ -788,31 +795,40 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
         ret = encodeThumb(inInfo, &hData.thumb_data, &hData.thumb_size);
         if (!ret || hData.thumb_size <= 0) {
             inInfo->doThumbNail = 0;
-            ALOGW("faild to get thumbNail, will remove it.");
+            ALOGW("failed to get thumbNail, will remove it.");
         }
     }
 
-    /* Generate JPEG exif app1 header */
+    /* generate JPEG exif app1 header, insert thumbnail data if nessessary */
     ret = generate_app1_header(&hData, &hData.header_buf, &hData.header_len);
     if (!ret || hData.header_len <= 0) {
         ALOGE("failed to generate APP1 header.");
         goto TASK_OUT;
     }
 
-    memset(outPkt, 0, sizeof(OutputPacket_t));
-    /* Encode raw image by commit input fd to the encoder */
-    ret = encodeImageFD(inInfo, hData.header_len, outPkt);
+    /* encode raw image by commit input\output fd */
+    ret = encodeImageFD(inInfo, outInfo);
     if (!ret) {
         ALOGE("failed to encode task.");
         goto TASK_OUT;
     }
 
     /*
-     * Encoded picture from vpu carried APP0 header information deault, so
-     * if wants to carried APP1 header instead, remove APP0 header first.
+     * output frame carried APP0 header information deault, so remove
+     * APP0 header first if wants to carry APP1 header.
      */
-    memcpy(outPkt->data, hData.header_buf, hData.header_len);
-    outPkt->size = outPkt->size + hData.header_len - APP0_DEFAULT_LEN;
+    pktOut = outInfo->outPkt;
+    tmpBuf = (uint8_t *)malloc(pktOut.size + hData.header_len - APP0_DEFAULT_LEN);
+    memcpy(tmpBuf, hData.header_buf, hData.header_len);
+    memcpy(tmpBuf + hData.header_len,
+           pktOut.data + APP0_DEFAULT_LEN,
+           pktOut.size - APP0_DEFAULT_LEN);
+
+    outInfo->outBufLen = pktOut.size + hData.header_len - APP0_DEFAULT_LEN;
+
+    memset(outInfo->outputVirAddr, 0, outInfo->outBufLen);
+    memcpy(outInfo->outputVirAddr, tmpBuf, outInfo->outBufLen);
+    deinitOutputPacket(&pktOut);
 
     /* dump output buffer if neccessary */
     if ((enc_debug & DEBUG_RECORD_OUT) && (mFrameCount % 10 == 0)) {
@@ -821,24 +837,31 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, OutputPacket_t *outPkt)
         sprintf(fileName, "/data/video/enc_output_%d.jpg", mFrameCount);
         mOutputFile = fopen(fileName, "wb");
         if (mOutputFile) {
-            dump_data_to_file(outPkt->data, outPkt->size, mOutputFile);
+            dump_data_to_file(outInfo->outputVirAddr, outInfo->outBufLen, mOutputFile);
             ALOGD("dump output jpg to %s", fileName);
         } else {
             ALOGD("failed to open output file, err - %s", strerror(errno));
         }
     }
 
-    ALOGD("task encode success get outputFileLen - %d", outPkt->size);
+    ALOGD("task encode success get output len %d", outInfo->outBufLen);
 
 TASK_OUT:
     if (hData.thumb_data)
         free(hData.thumb_data);
     if (hData.header_buf)
         free(hData.header_buf);
+    if (tmpBuf) {
+        free(tmpBuf);
+        tmpBuf = NULL;
+    }
 
-    mFrameCount++;
+    if (!ret) {
+        // indicate that the execution failed
+        outInfo->outBufLen = 0;
+    }
+
     time_end_record("encode task");
 
     return ret;
 }
-
