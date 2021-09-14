@@ -1,1 +1,1 @@
-#define GIT_INFO "0161028 author: Chen Jinsen [project] add licence declare"
+#define GIT_INFO "2c40018 author: Bian Jin chen mpi: correct header libs on Android 12."

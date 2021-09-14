@@ -45,14 +45,12 @@ cc_library_shared {
         "librga",
     ],
 
-    header_libs: ["libhwjpeg_headers"],
+    header_libs: [
+        "libhwjpeg_headers",
+        "libhardware_headers",
+    ],
     export_header_lib_headers: ["libhwjpeg_headers"],
     export_shared_lib_headers: ["libutils",],
-
-    include_dirs: [
-        "hardware/rockchip/librga",
-        "hardware/libhardware/include",
-    ],
 
     // compile_multilib: "32",
 }
