@@ -4,7 +4,8 @@ HwJpeg 库用于支持 Rockchip 平台 JPEG 硬编解码，是平台 MPP（Media
 类封装了硬解码相关操作，用于支持图片或 MJPEG 码流解码。
 
 工程包含主要目录：
-- mpi：HwJpeg 库实现代码
+- inc：HwJpeg 库头文件
+- src：HwJpeg 库实现代码
 - test：HwJpeg 测试实例
 
 > 工程代码使用 mk 文件组织，在 Android SDK 环境下直接编译使用即可。
@@ -63,7 +64,7 @@ MpiJpegEncoder 类是平台 JPEG 硬编码的封装，目前主要有三类接�
 encodeFrame & encodeFile 为同步阻塞编码方式，OutputPacket_t 为编码输出封装，
 包含输出数据的内存地址信息。
 
-- encode(EncInInfo *inInfo, OutputPacket_t *outPkt);
+- encode(EncInInfo *aInInfo, EncOutInfo *aOutInfo);
 
 encode 输入数据类型为文件 fd，是为 cameraHal 设计的一套编码方式，输出 JPEG 图片
 包含编码缩略图、APP1 EXIF 头信息等。

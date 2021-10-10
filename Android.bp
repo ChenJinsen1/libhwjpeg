@@ -6,3 +6,51 @@ cc_library_headers {
         "inc/mpp_inc",
     ],
 }
+
+// ANDROIDMK TRANSLATION ERROR: unsupported line
+// $(info $(shell ($(LOCAL_PATH)/compile_setup.sh $(LOCAL_PATH))))
+
+cc_library_shared {
+    name: "libhwjpeg",
+    vendor: true,
+
+    arch: {
+        arm: {
+            instruction_set: "thumb",
+        },
+    },
+
+    cppflags: [
+        "-std=c++11",
+        "-fno-threadsafe-statics",
+    ],
+
+    srcs: [
+        "src/Utils.cpp",
+        "src/QList.cpp",
+        "src/MpiDebug.cpp",
+        "src/BitReader.cpp",
+        "src/JpegParser.cpp",
+        "src/ExifBuilder.cpp",
+        "src/RKEncoderWraper.cpp",
+        "src/MpiJpegEncoder.cpp",
+        "src/MpiJpegDecoder.cpp",
+    ],
+
+    shared_libs: [
+        "libutils",
+        "liblog",
+        "libmpp",
+        "librga",
+    ],
+
+    header_libs: [
+        "libhwjpeg_headers",
+        "libhardware_headers",
+    ],
+
+    export_header_lib_headers: ["libhwjpeg_headers"],
+    export_shared_lib_headers: ["libutils",],
+
+    // compile_multilib: "32",
+}
