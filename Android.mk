@@ -1,7 +1,7 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-$(info $(shell ($(LOCAL_PATH)/src/compile_setup.sh $(LOCAL_PATH)/src)))
+$(info $(shell ($(LOCAL_PATH)/genversion.sh)))
 
 include $(CLEAR_VARS)
 

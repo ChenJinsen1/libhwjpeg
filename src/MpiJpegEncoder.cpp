@@ -76,7 +76,7 @@ MpiJpegEncoder::MpiJpegEncoder() :
     mInputFile(NULL),
     mOutputFile(NULL)
 {
-    ALOGI("version - %s", GIT_INFO);
+    ALOGI("version: %s", HWJPEG_VERSION_INFO);
 
     /* input format set to YUV420SP default */
     mInputFmt = INPUT_FMT_YUV420SP;

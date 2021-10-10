@@ -78,7 +78,7 @@ MpiJpegDecoder::MpiJpegDecoder() :
     mInputFile(NULL),
     mOutputFile(NULL)
 {
-    ALOGI("version - %s", GIT_INFO);
+    ALOGI("version: %s", HWJPEG_VERSION_INFO);
 
     // Output Format set to YUV420SP default
     mOutputFmt = OUT_FORMAT_YUV420SP;
