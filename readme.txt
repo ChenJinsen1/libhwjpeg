@@ -20,11 +20,11 @@ MpiJpegDecoder 类是平台 JPEG 硬解码的封装，支持输入 JPG 图片及
 decodePacket & decodeFile 为同步解码方式，同步解码方式使用简单，阻塞等待解码输出，
 OutputFrame_t 为解码输出封装，包含输出帧宽、高、物理地址、虚拟地址等信息。
 
-- decode_sendpacket(char* input_buf, size_t buf_len);
-- decode_getoutframe(OutputFrame_t *aframeOut);
+- sendpacket(char* input_buf, size_t buf_len);
+- getoutframe(OutputFrame_t *aframeOut);
 
-decode_sendpacket & decode_getoutframe 用于配合实现异步解码输出，应用端处理开启两个线程，一
-个线程送输入 decode_sendpacket，另一个线程异步取输出 decode_getoutframe。
+sendpacket & getoutframe 用于配合实现异步解码输出，应用端处理开启两个线程，一
+个线程送输入 sendpacket，另一个线程异步取输出 getoutframe。
 
 **Note:**
 1. HwJpeg 解码默认输出 RAW NV12 数据

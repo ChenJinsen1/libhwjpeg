@@ -23,7 +23,7 @@
 #include "JpegParser.h"
 #include "BitReader.h"
 
-static MPP_RET jpegd_skip_section(BitReader *br)
+MPP_RET jpeg_parser_skip_section(BitReader *br)
 {
     uint32_t len = 0;
 
@@ -44,7 +44,7 @@ static MPP_RET jpegd_skip_section(BitReader *br)
 
 /* return the 8 bit start code value and update the search
    state. Return -1 if no start code found */
-int32_t jpeg_find_marker(const uint8_t **pbuf_ptr, const uint8_t *buf_end)
+int32_t jpeg_parser_find_marker(const uint8_t **pbuf_ptr, const uint8_t *buf_end)
 {
     const uint8_t *buf_ptr;
     unsigned int v, v2;
@@ -72,7 +72,7 @@ found:
     return val;
 }
 
-MPP_RET jpeg_decode_sof(BitReader *br, uint32_t *out_width, uint32_t *out_height)
+MPP_RET jpeg_parser_decode_sof(BitReader *br, uint32_t *out_width, uint32_t *out_height)
 {
     uint32_t len, bits;
     uint32_t width, height, nb_components;
@@ -129,7 +129,7 @@ MPP_RET jpeg_parser_get_dimens(char *buf, size_t buf_size,
     while (buf_ptr < buf_end) {
         int section_finish = 1;
         /* find start marker */
-        start_code = jpeg_find_marker(&buf_ptr, buf_end);
+        start_code = jpeg_parser_find_marker(&buf_ptr, buf_end);
         if (start_code < 0) {
             ALOGV("start code not found");
         }
@@ -145,7 +145,7 @@ MPP_RET jpeg_parser_get_dimens(char *buf, size_t buf_size,
             /* nothing to do on SOI */
             break;
         case SOF0:
-            if (MPP_OK == jpeg_decode_sof(&br, out_width, out_height)) {
+            if (MPP_OK == jpeg_parser_decode_sof(&br, out_width, out_height)) {
                 return MPP_OK;
             } else {
                 return MPP_NOK;
@@ -182,7 +182,7 @@ MPP_RET jpeg_parser_get_dimens(char *buf, size_t buf_size,
         }
 
         if (!section_finish) {
-            if (MPP_OK != jpegd_skip_section(&br)) {
+            if (MPP_OK != jpeg_parser_skip_section(&br)) {
                 ALOGV("Fail to skip section 0xFF%02x!", start_code);
                 return MPP_NOK;
             }

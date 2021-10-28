@@ -17,14 +17,15 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "RKEncoderWraper"
+#define LOG_TAG "RKExifWrapper"
 #include <utils/Log.h>
 
 #include <stdlib.h>
 #include <string.h>
-#include "RKEncoderWraper.h"
 
-void parse_exif_info(RkExifInfo *exifInfo, ExifData *edata)
+#include "RKExifWrapper.h"
+
+static void parseExifInfo(RkExifInfo *exifInfo, ExifData *edata)
 {
     RkGPSInfo *gpsInfo = exifInfo->gpsInfo;
     ExifContent *ifd;
@@ -308,76 +309,64 @@ void parse_exif_info(RkExifInfo *exifInfo, ExifData *edata)
                            0x01, edata->order, 0x06);
 }
 
-void release_exif_data(ExifData *edata)
+bool RKExifWrapper::getExifHeader(ExifParam *param,
+                                  uint8_t **outBuf, int *size)
 {
-    ExifContent *ifd;
-    int i, j;
+    bool ret = false;
+    uint8_t *exif_buf  = NULL;
+    int32_t  exif_size = 0;
 
-    for (i = 0; i < EXIF_IFD_COUNT; i++) {
-        ifd = &edata->ifd[i];
-        for (j = 0; j < ifd->entry_count; j++) {
-            exif_release_entry(&ifd->entries[j]);
-        }
-    }
-}
+    static unsigned char App1Header[] = { 0xff, 0xd8, 0xff, 0xe1 };
 
-bool generate_app1_header(RkHeaderData *data, unsigned char **buf, int *len)
-{
-    bool ret;
-    ExifData eData;
-    unsigned char* exif_buf;
-    int exif_len;
-
-    unsigned char App1Header[] = { 0xff, 0xd8, 0xff, 0xe1 };
-
-    if (!buf || !len) {
+    if (NULL == param) {
         ALOGE("found invalid input param.");
         return false;
     }
 
-    ALOGV("generate APP1 header start");
-
+    ExifData eData;
     memset(&eData, 0, sizeof(ExifData));
-    eData.thumb_data = data->thumb_data;
-    eData.thumb_size = data->thumb_size;
+    eData.thumb_data = param->thumb_data;
+    eData.thumb_size = param->thumb_size;
 
-    /*
-     * Parse from RkExifInfo -> ExifData.
-     * -param[in]  - eInfo
-     * -param[out] - eData
-     */
-    parse_exif_info(data->exifInfo, &eData);
+    /* parse from RkExifInfo -> ExifData */
+    parseExifInfo(param->exif_info, &eData);
 
-    ret = exif_general_build(&eData, &exif_buf, &exif_len);
+    ret = exif_general_build(&eData, &exif_buf, &exif_size);
     if (!ret) {
-        ALOGE("failed to genaral exif from builder.");
+        ALOGE("failed to general exif from builder.");
+        ret = false;
         goto EXIT;
     }
 
     // Allocate enough memory for app1 header
     // (SOI + App1Marker + App1Length + exif_info)
-    *buf = (unsigned char*)malloc(exif_len + 6);
-    if (!*buf)  {
-        ALOGE("failed to alloc app1 header buf.");
+    *outBuf = (uint8_t*)malloc(exif_size + 6);
+    if (!(*outBuf))  {
+        ALOGE("failed to alloc header buf.");
         ret = false;
         goto EXIT;
     }
 
     // 0xff 0xd8 0xdd 0xe1
-    memcpy(*buf, App1Header, 4);
+    memcpy(*outBuf, App1Header, 4);
     // length of app1 exif part
-    exif_set_short(*buf + 4, EXIF_BYTE_ORDER_MOTOROLA, exif_len + 2);
+    exif_set_short(*outBuf + 4, EXIF_BYTE_ORDER_MOTOROLA, exif_size + 2);
 
-    /* add exif info */
-    memcpy(*buf + 6, exif_buf, exif_len);
+    memcpy(*outBuf + 6, exif_buf, exif_size);
+    *size = exif_size + 6;
 
-    *len = exif_len + 6;
     ret = true;
 
-    ALOGV("generate APP1 header get len - %d",  *len);
+    ALOGV("get exif header, len  %d",  *size);
 
 EXIT:
-    release_exif_data(&eData);
+    // release exif entry allocated at builder
+    for (int i = 0; i < EXIF_IFD_COUNT; i++) {
+        ExifContent ifd = eData.ifd[i];
+        for (int j = 0; j < ifd.entry_count; j++) {
+            exif_release_entry(&ifd.entries[j]);
+        }
+    }
 
     if (exif_buf)
         free(exif_buf);

@@ -25,32 +25,38 @@
 #include "mpp_frame.h"
 #include "mpp_packet.h"
 
-void dump_mpp_frame_to_file(MppFrame frame, FILE *fp);
-void dump_mpp_packet_to_file(MppPacket packet, FILE *fp);
-void dump_data_to_file(uint8_t *data, int size, FILE *fp);
-MPP_RET dump_dma_fd_to_file(int fd, size_t size, FILE *fp);
+#define ALIGN(x, a)         (((x)+(a)-1)&~((a)-1))
 
-MPP_RET get_file_ptr(const char *file_name, char **buf, size_t *size);
-MPP_RET dump_ptr_to_file(char *buf, size_t size, const char *output_file);
+class CommonUtil {
+public:
+    /* global dump and store methods */
+    static void dumpMppFrameToFile(MppFrame frame, FILE *file);
+    static void dumpMppPacketToFile(MppPacket packet, FILE *file);
+    static void dumpDataToFile(char *data, size_t size, FILE *file);
+    static void dumpDataToFile(char *data, size_t size, const char *fileName);
+    static void dumpDmaFdToFile(int fd, size_t size, FILE *file);
+    // allocate buffer memory inside, don't forget to free it.
+    static MPP_RET storeFileData(const char *file_name, char **data, size_t *length);
 
-MPP_RET crop_yuv_image(uint8_t *src, uint8_t *dst, int src_width, int src_height,
-                       int src_wstride, int src_hstride,
-                       int dst_width, int dst_height);
+    /* yuv image related operations */
+    static MPP_RET cropImage(char *src, char *dst,
+                             int src_width, int src_height,
+                             int src_wstride, int src_hstride,
+                             int dst_width, int dst_height);
+    static MPP_RET readImage(char *src, char *dst,
+                             int width, int height,
+                             int wstride, int hstride,
+                             MppFrameFormat fmt);
 
-MPP_RET read_yuv_image(uint8_t *dst, uint8_t *src, int width, int height,
-                       int hor_stride, int ver_stride,
-                       MppFrameFormat fmt);
-MPP_RET fill_yuv_image(uint8_t *buf, int width, int height,
-                       int hor_stride, int ver_stride, MppFrameFormat fmt,
-                       int frame_count);
+    /*  set\get __system_property_ */
+    static int envGetU32(const char *name, uint32_t *value, uint32_t default_value);
+    static int envGetStr(const char *name, const char **value, const char *default_value);
+    static int envSetU32(const char *name, uint32_t value);
+    static int envSetStr(const char *name, char *value);
 
-int32_t env_get_u32(const char *name, uint32_t *value, uint32_t default_value);
-int32_t env_get_str(const char *name, const char **value, const char *default_value);
-int32_t env_set_u32(const char *name, uint32_t value);
-int32_t env_set_str(const char *name, char *value);
-
-bool is_valid_dma_fd(int fd);
-
-void set_performance_mode(int on);
+    /* other util methods */
+    static bool isValidDmaFd(int fd);
+    static void setPerformanceMode(int on);
+};
 
 #endif //__UTILS_H__

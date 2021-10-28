@@ -32,7 +32,7 @@ build_date=`date +"%Y-%m-%d %H:%M:%S"`
 # query compiling author
 build_name=`cat ~/.gitconfig | sed -n "s/^\(.*\)name = \(.*\)/\2/p" | cut -c 1-3`
 
-DST_VERSION_FILE=`pwd`/version.h
+DST_VERSION_FILE=`pwd`/src/version.h
 
 sed -i "/^#define *HWJPEG_VERSION_INFO   */s/\(#define *HWJPEG_VERSION_INFO   *\)\(\".*\"\)/\1\"${version}\"/" ${DST_VERSION_FILE}
 sed -i "/^#define *HWJPEG_BUILD_INFO  */s/\(#define *HWJPEG_BUILD_INFO  *\)\(\".*\"\)/\1\"built-${build_name} ${build_date}\"/" ${DST_VERSION_FILE}

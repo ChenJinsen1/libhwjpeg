@@ -30,21 +30,21 @@ public:
 
     // Supported lists for InputFormat
     typedef enum {
-        INPUT_FMT_YUV420SP      = MPP_FMT_YUV420SP,
-        INPUT_FMT_YUV420P       = MPP_FMT_YUV420P,
-        INPUT_FMT_YUV422SP_VU   = MPP_FMT_YUV422SP_VU,
-        INPUT_FMT_YUV422_YUYV   = MPP_FMT_YUV422_YUYV,
-        INPUT_FMT_YUV422_UYVY   = MPP_FMT_YUV422_UYVY,
-        INPUT_FMT_ARGB8888      = MPP_FMT_ARGB8888,
-        INPUT_FMT_RGBA8888      = MPP_FMT_RGBA8888,
-        INPUT_FMT_ABGR8888      = MPP_FMT_ABGR8888
+        INPUT_FMT_YUV420SP     = MPP_FMT_YUV420SP,
+        INPUT_FMT_YUV420P      = MPP_FMT_YUV420P,
+        INPUT_FMT_YUV422SP_VU  = MPP_FMT_YUV422SP_VU,
+        INPUT_FMT_YUV422_YUYV  = MPP_FMT_YUV422_YUYV,
+        INPUT_FMT_YUV422_UYVY  = MPP_FMT_YUV422_UYVY,
+        INPUT_FMT_ARGB8888     = MPP_FMT_ARGB8888,
+        INPUT_FMT_RGBA8888     = MPP_FMT_RGBA8888,
+        INPUT_FMT_ABGR8888     = MPP_FMT_ABGR8888
     } InputFormat;
 
     typedef struct {
-        uint8_t *data;
-        int size;
+        char  *data;
+        int    size;
         /* Output packet hander */
-        void *packetHandler;
+        void  *packetHandler;
     } OutputPacket_t;
 
     typedef struct {
@@ -83,17 +83,19 @@ public:
 
     bool prepareEncoder();
     void flushBuffer();
+
+    void updateEncodeQuality(int quant);
     bool updateEncodeCfg(int width, int height,
                          InputFormat fmt = INPUT_FMT_YUV420SP, int qLvl = 8);
 
     /*
-     * Output packet buffers within limits, so release packet buffer if one
+     * output packet buffers within limits, so release packet buffer if one
      * packet has been display successful.
      */
     void deinitOutputPacket(OutputPacket_t *aPktOut);
 
     bool encodeFrame(char *data, OutputPacket_t *aPktOut);
-    bool encodeFile(const char *input_file, const char *output_file);
+    bool encodeFile(const char *inputFile, const char *outputFile);
 
     /*
      * designed for Rockchip cameraHal, commit input\output fd for encoder
@@ -105,7 +107,7 @@ public:
 
 private:
     MppCtx          mMppCtx;
-    MppApi          *mMpi;
+    MppApi         *mMpi;
 
     int             mInitOK;
     uint32_t        mFrameCount;
@@ -113,9 +115,9 @@ private:
     /*
      * Format of the raw input data for encode
      */
-    int             mInputWidth;
-    int             mInputHeight;
-    InputFormat     mInputFmt;
+    int             mWidth;
+    int             mHeight;
+    InputFormat     mFmt;
 
      /* coding quality - range from (1 - 10) */
     int             mEncodeQuality;
@@ -125,35 +127,25 @@ private:
     /*
      * output packet list
      *
-     * Note: Output packet buffers within limits, so wo need to release output
+     * Note: output packet buffers within limits, so wo need to release output
      * buffer as soon as we process everything
      */
-    QList           *mPackets;
+    QList          *mPackets;
 
-    /* Dump input & output for debug */
-    FILE            *mInputFile;
-    FILE            *mOutputFile;
+    /* dump input & output for debug */
+    FILE           *mInputFile;
+    FILE           *mOutputFile;
 
-private:
-    void updateEncodeQuality(int quant);
-    MPP_RET runFrameEnc(MppFrame in_frame, MppPacket out_packet);
+    int getFrameSize(InputFormat fmt, int width, int height);
 
-    MPP_RET cropInputYUVImage(EncInInfo *aInfoIn, void* outAddr);
+    MPP_RET runFrameEnc(MppFrame inFrm, MppPacket outPkt);
 
-    /*
-     * Encode raw image by commit input fd to the encoder.
-     *
-     * param[in] aInfoIn - pointer to input buffer parameter for encoder
-     * param[in/out] aInfoOut - pointer to output buffer parameter for encoder
-     */
+    MPP_RET cropThumbImage(EncInInfo *aInfoIn, void* outAddr);
+
+    /* encode raw image by commit input fd to the encoder */
     bool encodeImageFD(EncInInfo *aInfoIn, EncOutInfo *aInfoOut);
 
-    /*
-     * ThumbNail encode for a large resolution input image.
-     *
-     * param[in] aInfoIn - input parameter for thumnNail encode
-     * param[out] data - pointer to buffer pointer containing output data.
-     */
+    /* thumbNail encode for a large resolution input image */
     bool encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len);
 };
 

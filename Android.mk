@@ -20,7 +20,7 @@ LOCAL_SRC_FILES := \
 	src/BitReader.cpp \
 	src/JpegParser.cpp \
 	src/ExifBuilder.cpp \
-	src/RKEncoderWraper.cpp \
+	src/RKExifWrapper.cpp \
 	src/MpiJpegEncoder.cpp \
 	src/MpiJpegDecoder.cpp \
 
