@@ -86,7 +86,8 @@ public:
 
     void updateEncodeQuality(int quant);
     bool updateEncodeCfg(int width, int height,
-                         InputFormat fmt = INPUT_FMT_YUV420SP, int qLvl = 8);
+                         InputFormat fmt = INPUT_FMT_YUV420SP, int qLvl = 8,
+                         int wstride = 0, int hstride = 0);
 
     /*
      * output packet buffers within limits, so release packet buffer if one
@@ -117,6 +118,8 @@ private:
      */
     int             mWidth;
     int             mHeight;
+    int             mHorStride;
+    int             mVerStride;
     InputFormat     mFmt;
 
      /* coding quality - range from (1 - 10) */

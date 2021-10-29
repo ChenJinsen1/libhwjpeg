@@ -65,6 +65,8 @@ MpiJpegEncoder::MpiJpegEncoder() :
     mFrameCount(0),
     mWidth(0),
     mHeight(0),
+    mHorStride(0),
+    mVerStride(0),
     mEncodeQuality(-1),
     mMemGroup(NULL),
     mPackets(NULL),
@@ -199,7 +201,8 @@ void MpiJpegEncoder::updateEncodeQuality(int quant)
 }
 
 bool MpiJpegEncoder::updateEncodeCfg(int width, int height,
-                                     InputFormat fmt, int qLvl)
+                                     InputFormat fmt, int qLvl,
+                                     int wstride, int hstride)
 {
     MPP_RET ret = MPP_OK;
     MppEncPrepCfg prep_cfg;
@@ -212,8 +215,6 @@ bool MpiJpegEncoder::updateEncodeCfg(int width, int height,
     if (mWidth == width && mHeight == height && mFmt == fmt)
         return true;
 
-    ALOGV("updateEncodeCfg: w %d h %d inputFmt %d", width, height, fmt);
-
     if (width < 16 || width > 8192) {
         ALOGE("invalid width %d is not in range [16..8192]", width);
         return false;
@@ -224,16 +225,16 @@ bool MpiJpegEncoder::updateEncodeCfg(int width, int height,
         return false;
     }
 
-    int wstride = ALIGN(width, 16);
-    int hstride = ALIGN(height, 16);
+    int hor_stride = (wstride > 0) ? wstride : width;
+    int ver_stride = (hstride > 0) ? hstride : height;
 
     prep_cfg.change       = MPP_ENC_PREP_CFG_CHANGE_INPUT |
                             MPP_ENC_PREP_CFG_CHANGE_ROTATION |
                             MPP_ENC_PREP_CFG_CHANGE_FORMAT;
     prep_cfg.width        = width;
     prep_cfg.height       = height;
-    prep_cfg.hor_stride   = wstride;
-    prep_cfg.ver_stride   = hstride;
+    prep_cfg.hor_stride   = hor_stride;
+    prep_cfg.ver_stride   = ver_stride;
     prep_cfg.format       = (MppFrameFormat)fmt;
     prep_cfg.rotation     = MPP_ENC_ROT_0;
     ret = mMpi->control(mMppCtx, MPP_ENC_SET_PREP_CFG, &prep_cfg);
@@ -246,7 +247,12 @@ bool MpiJpegEncoder::updateEncodeCfg(int width, int height,
 
     mWidth = width;
     mHeight = height;
+    mHorStride = hor_stride;
+    mVerStride = ver_stride;
     mFmt = fmt;
+
+    ALOGD("updateCfg: w %d h %d wstride %d hstride %d inputFmt %d",
+          mWidth, mHeight, mHorStride, mVerStride, mFmt);
 
     return true;
 }
@@ -306,10 +312,7 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
 
     time_start_record();
 
-    int wstride = ALIGN(mWidth, 16);
-    int hstride = ALIGN(mHeight, 16);
     int size = getFrameSize(mFmt, mWidth, mHeight);
-
     ret = mpp_buffer_get(mMemGroup, &inFrmBuf, size);
     if (MPP_OK != ret) {
         ALOGE("failed to get buffer for input frame ret %d", ret);
@@ -322,7 +325,7 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
     // input frame to aligned before encode
     ret = CommonUtil::readImage(data, (char*)inFrmPtr,
                                 mWidth, mHeight,
-                                wstride, hstride,
+                                mHorStride, mVerStride,
                                 (MppFrameFormat)mFmt);
     if (MPP_OK != ret)
         goto ENCODE_OUT;
@@ -335,8 +338,8 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
 
     mpp_frame_set_width(inFrm, mWidth);
     mpp_frame_set_height(inFrm, mHeight);
-    mpp_frame_set_hor_stride(inFrm, wstride);
-    mpp_frame_set_ver_stride(inFrm, hstride);
+    mpp_frame_set_hor_stride(inFrm, mHorStride);
+    mpp_frame_set_ver_stride(inFrm, mVerStride);
     mpp_frame_set_fmt(inFrm, (MppFrameFormat)mFmt);
     mpp_frame_set_buffer(inFrm, inFrmBuf);
 
@@ -569,8 +572,6 @@ bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn, EncOutInfo *aOutInfo)
 
     int width  = aInfoIn->width;
     int height = aInfoIn->height;
-    int wstride = ALIGN(width, 16);
-    int hstride = ALIGN(height, 8);
 
     ALOGV("start encode frame w %d h %d", width, height);
 
@@ -585,8 +586,9 @@ bool MpiJpegEncoder::encodeImageFD(EncInInfo *aInfoIn, EncOutInfo *aOutInfo)
     mpp_frame_init(&inFrm);
     mpp_frame_set_width(inFrm, width);
     mpp_frame_set_height(inFrm, height);
-    mpp_frame_set_hor_stride(inFrm, wstride);
-    mpp_frame_set_ver_stride(inFrm, hstride);
+    // yuv buffer from cameraHal didn't has stride
+    mpp_frame_set_hor_stride(inFrm, width);
+    mpp_frame_set_ver_stride(inFrm, height);
     mpp_frame_set_fmt(inFrm, (MppFrameFormat)aInfoIn->format);
 
     {
@@ -664,8 +666,6 @@ bool MpiJpegEncoder::encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len)
 
     int width  = aInfoIn->thumbWidth;
     int height = aInfoIn->thumbHeight;
-    int wstride = ALIGN(width, 16);
-    int hstride = ALIGN(height, 8);
     int allocWidth  = width;
     int allocHeight = height;
 
@@ -677,8 +677,8 @@ bool MpiJpegEncoder::encodeThumb(EncInInfo *aInfoIn, uint8_t **data, int *len)
     mpp_frame_init(&inFrm);
     mpp_frame_set_width(inFrm, width);
     mpp_frame_set_height(inFrm, height);
-    mpp_frame_set_hor_stride(inFrm, wstride);
-    mpp_frame_set_ver_stride(inFrm, hstride);
+    mpp_frame_set_hor_stride(inFrm, width);
+    mpp_frame_set_ver_stride(inFrm, height);
     mpp_frame_set_fmt(inFrm, (MppFrameFormat)aInfoIn->format);
 
     {
