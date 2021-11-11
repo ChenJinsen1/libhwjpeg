@@ -493,7 +493,7 @@ MPP_RET MpiJpegDecoder::getoutframe(OutputFrame_t *aframeOut)
                     CommonUtil::dumpDataToFile(aframeOut->MemVirAddr,
                                                aframeOut->OutputSize, mOutputFile);
                 }
-                ALOGD("dump output yuv [%dx%d] to %s",
+                ALOGD("dump output yuv [%d %d] to %s",
                       aframeOut->FrameWidth, aframeOut->FrameHeight, fileName);
             } else {
                 ALOGD("failed to open output file, err - %s", strerror(errno));
