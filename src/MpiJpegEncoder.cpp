@@ -176,7 +176,7 @@ void MpiJpegEncoder::flushBuffer()
 void MpiJpegEncoder::updateEncodeQuality(int quant)
 {
     MPP_RET ret = MPP_OK;
-    MppEncCodecCfg codec_cfg;
+    MppEncCfg cfg = NULL;
 
     if (mEncodeQuality == quant)
         return;
@@ -186,14 +186,18 @@ void MpiJpegEncoder::updateEncodeQuality(int quant)
         quant = 8;
     }
 
-    ALOGV("update encode quality - %d", quant);
+    ALOGD("update encode quality - %d", quant);
 
-    codec_cfg.coding = MPP_VIDEO_CodingMJPEG;
-    codec_cfg.jpeg.change = MPP_ENC_JPEG_CFG_CHANGE_QP;
+    mpp_enc_cfg_init(&cfg);
+
+    mpp_enc_cfg_set_s32(cfg, "codec:type", MPP_VIDEO_CodingMJPEG);
+    mpp_enc_cfg_set_s32(cfg, "rc:mode", MPP_ENC_RC_MODE_FIXQP);
+
     /* range from 1~10 */
-    codec_cfg.jpeg.quant = quant;
+    mpp_enc_cfg_set_s32(cfg, "jpeg:change", MPP_ENC_JPEG_CFG_CHANGE_QP);
+    mpp_enc_cfg_set_s32(cfg, "jpeg:quant", quant);
 
-    ret = mMpi->control(mMppCtx, MPP_ENC_SET_CODEC_CFG, &codec_cfg);
+    ret = mMpi->control(mMppCtx, MPP_ENC_SET_CFG, cfg);
     if (MPP_OK != ret)
         ALOGE("failed to set encode quality - %d", quant);
     else
@@ -351,7 +355,7 @@ bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
         mInputFile = fopen(fileName, "wb");
         if (mInputFile) {
             CommonUtil::dumpMppFrameToFile(inFrm, mInputFile);
-            ALOGD("dump input yuv to %s", fileName);
+            ALOGD("dump input yuv[%d %d] to %s", mWidth, mHeight, fileName);
         } else {
             ALOGD("failed to open input file, err - %s", strerror(errno));
         }
@@ -772,6 +776,9 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, EncOutInfo *outInfo)
         return false;
     }
 
+    ALOGD("start task: width %d height %d thumbWidth %d thumbHeight %d",
+          inInfo->width, inInfo->height, inInfo->thumbWidth, inInfo->thumbHeight);
+
     time_start_record();
 
     /* dump input data if neccessary */
@@ -783,7 +790,7 @@ bool MpiJpegEncoder::encode(EncInInfo *inInfo, EncOutInfo *outInfo)
         if (mInputFile) {
             int size = getFrameSize(inInfo->format, inInfo->width, inInfo->height);
             CommonUtil::dumpDataToFile((char*)inInfo->inputVirAddr, size, mInputFile);
-            ALOGD("dump input yuv to %s", fileName);
+            ALOGD("dump input yuv[%d %d] to %s", inInfo->width, inInfo->height, fileName);
         } else {
             ALOGD("failed to open input file, err - %s", strerror(errno));
         }
