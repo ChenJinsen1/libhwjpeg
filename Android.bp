@@ -1,3 +1,14 @@
+genrule {
+    name: "gen_hwjpeg_version",
+    srcs: [
+        "version.h.template",
+        "genversion.sh",
+        ".git/HEAD",
+    ],
+    cmd: "bash $(location genversion.sh) > $(out)",
+    out: ["version.h"],
+}
+
 cc_library_headers {
     name: "libhwjpeg_headers",
     vendor: true,
@@ -7,11 +18,9 @@ cc_library_headers {
     ],
 }
 
-// ANDROIDMK TRANSLATION ERROR: unsupported line
-// $(info $(shell ($(LOCAL_PATH)/compile_setup.sh $(LOCAL_PATH))))
-
 cc_library_shared {
     name: "libhwjpeg",
+    // generated_headers: ["gen_hwjpeg_version"],
     vendor: true,
 
     arch: {
