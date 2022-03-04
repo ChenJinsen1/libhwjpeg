@@ -446,8 +446,8 @@ SEND_OUT:
 
 MPP_RET MpiJpegDecoder::getoutframe(OutputFrame_t *aframeOut)
 {
-    MPP_RET ret   = MPP_OK;
-    MppTask task  = NULL;
+    MPP_RET ret  = MPP_OK;
+    MppTask task = NULL;
 
     if (!mInitOK)
         return MPP_ERR_VPU_CODEC_INIT;

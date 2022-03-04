@@ -302,12 +302,12 @@ int MpiJpegEncoder::getFrameSize(InputFormat fmt, int width, int height)
 
 bool MpiJpegEncoder::encodeFrame(char *data, OutputPacket_t *aPktOut)
 {
-    MPP_RET    ret       = MPP_OK;
+    MPP_RET    ret      = MPP_OK;
     /* input frame and output packet */
-    MppFrame   inFrm     = NULL;
-    MppBuffer  inFrmBuf  = NULL;
-    void      *inFrmPtr  = NULL;
-    MppPacket  outPkt    = NULL;
+    MppFrame   inFrm    = NULL;
+    MppBuffer  inFrmBuf = NULL;
+    void      *inFrmPtr = NULL;
+    MppPacket  outPkt   = NULL;
 
     if (!mInitOK) {
         ALOGW("please prepare encoder first before encodeFrame");
@@ -456,8 +456,8 @@ ENCODE_OUT:
 
 MPP_RET MpiJpegEncoder::runFrameEnc(MppFrame inFrm, MppPacket outPkt)
 {
-    MPP_RET ret         = MPP_OK;
-    MppTask task        = NULL;
+    MPP_RET ret  = MPP_OK;
+    MppTask task = NULL;
 
     if (!inFrm || !outPkt)
         return MPP_NOK;
